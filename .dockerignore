@@ -1,0 +1,11 @@
+node_modules
+dist
+.build
+deploy
+.git
+.env*
+!.env.example
+tests/e2e/.saida
+*.log
+*.zip
+midia
