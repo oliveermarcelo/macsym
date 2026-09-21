@@ -12,7 +12,7 @@
 import React, { useState } from 'react';
 import { Lock, Mail, AlertCircle, Loader2 } from 'lucide-react';
 import { AdminUser, login } from './auth';
-import logo from '../assets/logo.svg';
+import { LOGO } from '../media';
 
 export default function LoginScreen({ onSuccess }: { onSuccess: (user: AdminUser) => void }) {
   const [email, setEmail] = useState('');
@@ -43,7 +43,7 @@ export default function LoginScreen({ onSuccess }: { onSuccess: (user: AdminUser
 
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-8">
         <div className="flex flex-col items-center mb-8">
-          <img src={logo} alt="Macsym" className="h-14 w-auto mb-4" />
+          <img src={LOGO} alt="Macsym" className="h-14 w-auto mb-4" />
           <h1 className="text-lg font-extrabold text-gray-900">Painel Administrativo</h1>
           <p className="text-sm text-gray-500">Acesse para gerenciar a sua loja</p>
         </div>

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShoppingBag, Menu, X, User, Truck, Headset, CreditCard } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
-import logoUrl from '../assets/logo.svg';
+import { LOGO } from '../media';
 import MegaMenu, { MegaMenuMobile } from './MegaMenu';
 import { brlNumber } from '../utils/currency';
 import { INSTALLMENTS, LOJA } from '../config';
@@ -80,7 +80,7 @@ export default function Header({
             {/* Logo */}
             <div className="flex-shrink-0 cursor-pointer" onClick={onGoHome}>
               <img
-                src={logoUrl}
+                src={LOGO}
                 alt="Macsym"
                 className="h-9 sm:h-11 w-auto select-none"
               />

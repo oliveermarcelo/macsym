@@ -1,6 +1,7 @@
 {
-  "_comentario": "Origem das imagens editoriais. O script scripts/download-images.mjs baixa cada URL para public/banners/<arquivo>. Todas vêm do site atual da Macsym (camerasdevideo.com.br) — troque a URL aqui quando houver arte definitiva, ou simplesmente substitua o arquivo em public/banners/.",
+  "_comentario": "Origem das imagens editoriais e do logo. O script scripts/download-images.mjs baixa cada URL para public/banners/<arquivo>. O logo é o arquivo oficial da Macsym, servido hoje pelo WordPress: ele fica aqui (e não em src/assets) porque é conteúdo do cliente, trocável sem recompilar. Substituir a arte é trocar o arquivo em public/banners/ ou a URL aqui.",
   "arquivos": {
+    "logo-macsym.png": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/logo-site.png",
     "hero-cameras.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/videoconferencia-cam.jpg",
     "hero-microfones.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/1627550898.jpg",
     "hero-controladoras.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/controladora.jpg",

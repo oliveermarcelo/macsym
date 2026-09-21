@@ -28,7 +28,14 @@ comentário do que ele reproduz.
 
 ## Rodando localmente
 
-**Pré-requisitos:** Node.js 20+ (22 recomendado) e MySQL/MariaDB.
+**Pré-requisitos:** Node.js **22.6+** (22 LTS ou 24) e MySQL/MariaDB.
+
+> Os scripts de desenvolvimento (`dev:api`, `migrar`, `diagnostico`, `teste`)
+> executam TypeScript direto, com `--experimental-strip-types`. Em Node 22.15,
+> sem a flag, o erro é `ERR_UNKNOWN_FILE_EXTENSION: Unknown file extension
+> ".ts"` — parece código quebrado e é só a versão do Node. Em produção isso não
+> existe: o que roda lá é o JavaScript já compilado por `npm run build`, e para
+> ele Node 20 basta.
 
 ```bash
 # 1. Dependências

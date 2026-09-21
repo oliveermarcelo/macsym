@@ -12,6 +12,19 @@
  * Para (re)baixar os arquivos originais:  `npm run sync:midia`
  */
 
+/**
+ * Logo oficial da Macsym, como está no site atual.
+ *
+ * Vem de `public/`, e não de `src/assets/`, de propósito: é arte do cliente.
+ * Trocar a marca passa a ser substituir um arquivo — não recompilar a loja.
+ *
+ * O arquivo tem fundo transparente e letra escura, pensado para fundo claro.
+ * Por isso, sobre os fundos escuros (rodapé, painel), ele é apresentado dentro
+ * de uma "plaquinha" branca em vez de uma versão invertida inventada por nós:
+ * clarear um logo à força costuma estragar justamente o que a marca cuidou.
+ */
+export const LOGO = '/banners/logo-macsym.png';
+
 export const BANNERS = {
   heroCameras: '/banners/hero-cameras.jpg',
   heroMicrofones: '/banners/hero-microfones.jpg',

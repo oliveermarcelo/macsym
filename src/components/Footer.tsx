@@ -8,7 +8,7 @@ import {
   Mail, Check, AlertCircle, Instagram, Facebook, Phone, MapPin, Clock,
   CreditCard, QrCode, Barcode, ShieldCheck, ArrowRight, Send,
 } from 'lucide-react';
-import logoWhite from '../assets/logo-white.svg';
+import { LOGO } from '../media';
 import { LOJA } from '../config';
 import { LEGAL_DOCS, LegalDoc } from '../legal';
 
@@ -77,7 +77,9 @@ export default function Footer({ onOpenStory, onOpenCertifications, onOpenLegal 
         <div className="grid grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10">
           {/* Brand */}
           <div className="col-span-2 lg:col-span-4 space-y-5">
-            <img src={logoWhite} alt="Macsym" className="h-12 w-auto" />
+            <span className="inline-flex bg-white rounded-xl px-4 py-2.5">
+              <img src={LOGO} alt="Macsym" className="h-9 w-auto" />
+            </span>
             <p className="text-sm text-white/60 leading-relaxed max-w-xs">
               Macsym Tecnologia Eletrônica: câmeras PTZ, microfones, mesas controladoras e
               acessórios de áudio e vídeo para videoconferência, transmissão ao vivo,

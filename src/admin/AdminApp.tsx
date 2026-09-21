@@ -12,7 +12,7 @@ import {
 import { AdminProvider } from './AdminContext';
 import { AdminUser, currentUser, logout } from './auth';
 import LoginScreen from './LoginScreen';
-import logoWhite from '../assets/logo-white.svg';
+import { LOGO } from '../media';
 import Dashboard from './modules/Dashboard';
 import ProductsAdmin from './modules/ProductsAdmin';
 import OrdersAdmin from './modules/OrdersAdmin';
@@ -97,7 +97,9 @@ export default function AdminApp() {
   const SidebarContent = (
     <>
       <div className="flex items-center gap-3 px-5 h-20 border-b border-white/10">
-        <img src={logoWhite} alt="Macsym" className="h-12 w-auto" />
+        <span className="inline-flex bg-white rounded-xl px-3.5 py-2">
+          <img src={LOGO} alt="Macsym" className="h-8 w-auto" />
+        </span>
         <span className="text-white/50 text-[10px] uppercase tracking-widest border-l border-white/15 pl-3">
           Admin
         </span>
