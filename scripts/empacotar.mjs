@@ -20,6 +20,7 @@
 
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { builtinModules } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -104,15 +105,53 @@ cpSync(resolve(root, 'server/db'), resolve(out, 'db'), { recursive: true });
  * ferramental de build no servidor só gastaria disco e tempo de deploy.
  */
 const raiz = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
-const runtime = ['express', 'mysql2', 'bcryptjs', 'compression'];
+
+/*
+ * As dependências do pacote são LIDAS do código gerado, não escritas à mão.
+ *
+ * Aqui havia uma lista fixa com quatro nomes. Quando o Mercado Pago entrou no
+ * servidor, ninguém lembrou de acrescentá-lo: o esbuild deixa todo pacote como
+ * externo (`packages: 'external'`), então `app.js` passou a exigir um módulo
+ * que o `npm install` do servidor não instalava. O deploy subia, o processo
+ * morria no primeiro require com "Cannot find module 'mercadopago'" e o
+ * supervisor ficava reiniciando — erro que só aparece em produção, porque em
+ * desenvolvimento o node_modules da raiz tem tudo.
+ *
+ * Lendo os `require(...)` do bundle, a lista não tem como divergir de novo.
+ */
+const gerados = ['app.js', 'migrate.js', 'diagnostico.js']
+  .map((f) => resolve(out, f))
+  .filter((f) => existsSync(f));
+
+const detectadas = new Set(['express', 'mysql2', 'bcryptjs', 'compression']);
+for (const arquivo of gerados) {
+  const codigo = readFileSync(arquivo, 'utf8');
+  for (const [, especificador] of codigo.matchAll(/require\(\s*["']([^"']+)["']\s*\)/g)) {
+    if (especificador.startsWith('.') || especificador.startsWith('/')) continue;
+    if (especificador.startsWith('node:')) continue;
+    // "@scope/pkg/sub" → "@scope/pkg"; "pkg/sub" → "pkg"
+    const partes = especificador.split('/');
+    const nome = especificador.startsWith('@') ? partes.slice(0, 2).join('/') : partes[0];
+    if (builtinModules.includes(nome)) continue;
+    detectadas.add(nome);
+  }
+}
+
 const dependencies = {};
-for (const nome of runtime.sort()) {
+const faltando = [];
+for (const nome of [...detectadas].sort()) {
   const versao = raiz.dependencies?.[nome];
   if (!versao) {
-    console.error(`Dependência "${nome}" não está no package.json da raiz.`);
-    process.exit(1);
+    faltando.push(nome);
+    continue;
   }
   dependencies[nome] = versao;
+}
+if (faltando.length) {
+  console.error(
+    `O servidor compilado exige ${faltando.join(', ')}, que não está em "dependencies" do package.json da raiz.`,
+  );
+  process.exit(1);
 }
 
 writeFileSync(
