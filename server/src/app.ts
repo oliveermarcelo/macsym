@@ -51,10 +51,15 @@ export function createApp(): express.Express {
    * ambiente que termina o TLS e não repassa o cabeçalho: o navegador iria
    * para https, o proxy entregaria sem header, e nós mandaríamos para https
    * outra vez.
+   *
+   * FORCE_HTTPS=false adia a regra para a janela em que o servidor já está de
+   * pé e o certificado ainda não foi emitido. Sem essa saída, a instalação
+   * nova responde 301 em tudo — inclusive nas imagens e na API — apontando
+   * para um https que ainda não atende.
    */
   app.use((req, res, next) => {
     const proto = req.get('X-Forwarded-Proto');
-    if (config.isProd && proto !== undefined && proto.split(',')[0].trim() === 'http') {
+    if (config.isProd && config.forceHttps && proto !== undefined && proto.split(',')[0].trim() === 'http') {
       res.redirect(301, 'https://' + req.get('Host') + req.originalUrl);
       return;
     }

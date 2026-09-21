@@ -34,6 +34,11 @@ APP_ENV=production
 # HTTP, e o painel aceitaria a senha e voltaria para a tela de login sem
 # explicar por quê. Vire para true no mesmo dia em que o HTTPS entrar.
 SECURE_COOKIES=false
+
+# Sem certificado ainda: com o redirecionamento ligado, TUDO responde 301
+# para um https que não atende — páginas, imagens e API. Religue junto com
+# SECURE_COOKIES=true, no dia do certificado.
+FORCE_HTTPS=false
 ENV
 
 # APP_KEY (32 bytes em base64). GUARDE: trocá-la depois torna ilegíveis as
@@ -110,7 +115,8 @@ docker run --rm -p 80:80 -v /opt/macsym/certs:/etc/letsencrypt \
    `ssl_certificate /etc/letsencrypt/live/camerasdevideo.com.br/fullchain.pem`
    e redirecione a 80 para 443; monte `./certs:/etc/letsencrypt:ro` no serviço
    `web` e publique `"443:443"`.
-4. No `.env`: `APP_URL=https://camerasdevideo.com.br` e `SECURE_COOKIES=true`.
+4. No `.env`: `APP_URL=https://camerasdevideo.com.br`, `SECURE_COOKIES=true` e
+   `FORCE_HTTPS=true` (ou apague a linha — o padrão é ligado).
 5. `docker compose up -d`.
 
 A renovação é um cron chamando o mesmo `certbot renew` e um

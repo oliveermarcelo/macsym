@@ -74,6 +74,7 @@ export interface AppConfig {
   midiaDir: string;
   /** Confia em X-Forwarded-* (Passenger/nginx na Hostinger sempre põe). */
   trustProxy: boolean;
+  forceHttps: boolean;
 }
 
 export const config: AppConfig = {
@@ -96,6 +97,16 @@ export const config: AppConfig = {
   publicDir: env('PUBLIC_DIR', '') || detectPublicDir(),
   midiaDir: env('MIDIA_DIR', 'midia'),
   trustProxy: envBool('TRUST_PROXY', true),
+  /*
+   * Redirecionar http → https em produção. Ligado por padrão, e é assim que
+   * deve ficar: loja que aceita HTTP aceita sessão e cartão em texto claro.
+   *
+   * Desligue APENAS na janela entre subir o servidor e emitir o certificado.
+   * Com ele ligado e sem TLS, TUDO responde 301 para um https que não existe
+   * — a loja parece no ar (containers de pé, banco cheio) e nenhuma página
+   * abre.
+   */
+  forceHttps: envBool('FORCE_HTTPS', true),
 } as AppConfig;
 
 /**
