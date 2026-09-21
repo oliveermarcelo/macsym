@@ -1,0 +1,139 @@
+@import "tailwindcss";
+
+/* Inter auto-hospedada (arquivo variável, subsets latin + latin-ext).
+   Servir a fonte do próprio domínio evita a dependência do Google Fonts —
+   que o CSP de produção ('style-src self') bloqueia — e remove um request
+   externo do carregamento. Um único woff2 por subset cobre os pesos 300–900. */
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('./assets/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* ==================================================================
+     PALETA — grafite estrutural + o vermelho da marca Macsym (#DB3340).
+
+     A escala brand-* é um cinza-azulado de matiz único (215°): é ela que
+     pinta cabeçalho, rodapé, sidebar do painel e os fundos escuros. Só a
+     luminosidade muda de um degrau para o outro, e é isso que faz a loja
+     parecer pintada com uma cor só em vez de com cinzas parecidos.
+
+     A escala brand-accent-* é o vermelho. O 500 é exatamente a cor do site
+     atual; o 600 existe porque branco sobre o 500 dá 4,3:1 — reprova em
+     botão —, e sobre o 600 dá 5,9:1. Os tons claros (100/300) são para
+     texto e realce SOBRE os grafites escuros, onde o vermelho cheio some.
+
+     Contraste medido (WCAG 2.1):
+       branco sobre brand-900 #0F1318 → 17,8:1 ✓ AAA
+       branco sobre brand-800 #1A1F25 → 15,3:1 ✓ AAA  (hover)
+       branco sobre brand-700 #262C34 → 12,5:1 ✓ AAA  (botões, faixa, sidebar)
+       branco sobre brand-600 #3C444E →  9,0:1 ✓ AAA
+       brand-700 como texto sobre o fundo claro       → 11,9:1 ✓ AAA
+       branco sobre accent-600 #C2202C →  5,9:1 ✓ AA   (CTA)
+       accent-300 #F19AA0 sobre brand-800             →  7,4:1 ✓ AAA (realces)
+       texto ink #161A1F sobre accent-400 #E2606B     →  4,9:1 ✓ AA  (botão do rodapé)
+       texto ink sobre o fundo claro #F7F8FA          → 16,4:1 ✓ AAA
+     ================================================================== */
+  --color-brand-50: #f6f7f8;
+  --color-brand-100: #eceef1;
+  --color-brand-200: #d5d9de;
+  --color-brand-300: #aeb5be;
+  --color-brand-400: #7c8592;
+  --color-brand-500: #59626e;
+  --color-brand-600: #3c444e;
+  --color-brand-700: #262c34;   /* estrutural: botões, faixa, sidebar */
+  --color-brand-800: #1a1f25;   /* hover */
+  --color-brand-900: #0f1318;   /* fundos escuros e gradientes */
+
+  --color-brand-cream: #f7f8fa;       /* fundo geral (cinza quase branco) */
+  --color-brand-sand: #e5e8ec;        /* bordas suaves, gradientes */
+  --color-brand-ink: #161a1f;         /* texto principal */
+
+  /* Vermelho da marca. O 500 é a cor do site atual (#DB3340); o 600 é o tom
+     que passa no contraste com texto branco e por isso é o dos botões. */
+  --color-brand-accent-100: #fde3e5;  /* realce claro sobre fundo escuro */
+  --color-brand-accent-300: #f19aa0;  /* texto de destaque sobre escuro */
+  --color-brand-accent-400: #e2606b;  /* preenchimento com texto escuro em cima */
+  --color-brand-accent-500: #db3340;  /* a cor da marca */
+  --color-brand-accent-600: #c2202c;  /* CTA */
+  --color-brand-accent-700: #9c1822;  /* hover do CTA */
+
+  /* Apelidos herdados: existem porque aparecem espalhados pelas classes;
+     apontam para a escala acima. Em código novo, use brand-* e brand-accent-*. */
+  --color-primary-blue: #262c34;      /* = brand-700 */
+  --color-primary-container: #1a1f25; /* = brand-800 */
+  --color-brand-red: #db3340;         /* = brand-accent-500 */
+  --color-brand-bg: #f7f8fa;          /* = brand-cream */
+  --color-brand-text: #161a1f;        /* = brand-ink */
+  --color-brand-sage: #7c8592;        /* = brand-400 */
+  --color-brand-forest: #262c34;      /* = brand-700 */
+  --color-brand-olive: #1a1f25;       /* = brand-800 */
+
+  /* O Tailwind não define gray-150, e o projeto usa essa classe em 31 lugares:
+     as bordas simplesmente não apareciam. Definida aqui, entre 100 e 200. */
+  --color-gray-150: #ececec;
+
+  --animate-ripple: ripple 1s linear infinite;
+  --animate-fade-in: fadeIn 0.5s ease-out forwards;
+}
+
+@layer utilities {
+  .font-sans {
+    font-family: var(--font-sans);
+  }
+  .font-display {
+    font-family: var(--font-display);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Slow ambient zoom for hero background imagery */
+@keyframes kenburns {
+  from { transform: scale(1.05); }
+  to { transform: scale(1.15); }
+}
+.animate-kenburns {
+  animation: kenburns 18s ease-out infinite alternate;
+}
+
+/* Subtle marquee for the trust ticker */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+
+/* Respeita quem pediu menos animação no sistema operacional. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-kenburns,
+  .animate-marquee,
+  .animate-fade-in {
+    animation: none;
+  }
+}

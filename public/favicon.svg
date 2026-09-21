@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Macsym">
+  <rect width="64" height="64" rx="12" fill="#262c34"/>
+  <path d="M12 44 V16 H21 L32 33 L43 16 H52 V44 H44 V29 L35 42 H29 L20 29 V44 Z" fill="#ffffff"/>
+  <rect x="12" y="48" width="40" height="5" rx="2.5" fill="#db3340"/>
+</svg>

@@ -1,0 +1,41 @@
+node_modules/
+build/
+dist/
+coverage/
+
+# O pacote de produção (deploy/) É versionado de propósito: o deploy da
+# Hostinger é por Git, e o hPanel só faz `git clone` — sem build no servidor.
+# Se deploy/ voltar a ser ignorado, o servidor recebe só o TypeScript e a
+# aplicação não sobe ("app.js não encontrado").
+#
+# Regenere e commite a cada release:
+#   npm run build && npm run build:server && npm run empacotar
+#
+# Os sourcemaps ficam de fora: ~300 KB que só servem para depurar.
+deploy/**/*.map
+.DS_Store
+*.log
+*.zip
+
+# Variáveis de ambiente: senha do banco e chave de cifra das integrações.
+# O padrão pega qualquer variação (.env.hostinger, .env.producao, .env.bak…);
+# só o modelo sem segredo é versionado.
+.env*
+!.env.example
+
+# Servidor compilado pelo esbuild.
+.build/
+
+# Capturas geradas pelos testes de ponta a ponta.
+tests/e2e/.saida/
+
+# Artefatos de trabalho
+enviar-para-github.ps1
+dist-subtest/
+macsym-demo-hostinger/
+_to_delete/
+_transfer/
+
+# Imagens enviadas pelo painel. Conteúdo do cliente, não código: fica fora do
+# repositório e não pode ser apagado num deploy.
+midia/

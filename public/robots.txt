@@ -1,0 +1,9 @@
+# Macsym
+User-agent: *
+Allow: /
+
+# Áreas que não devem ser indexadas: painel e API.
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://camerasdevideo.com.br/sitemap.xml

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 72" role="img" aria-label="Macsym">
+  <title>Macsym</title>
+  <!-- Monograma: um M sólido com a barra vermelha da marca sob ele. -->
+  <path d="M6 52 V10 H18 L30 32 L42 10 H54 V52 H43 V28 L33 46 H27 L17 28 V52 Z" fill="#262c34"/>
+  <rect x="6" y="57" width="48" height="6" rx="3" fill="#db3340"/>
+  <text x="76" y="48" font-family="Inter, 'Helvetica Neue', Arial, sans-serif" font-size="36" font-weight="800" letter-spacing="2" fill="#262c34">MACSYM</text>
+</svg>

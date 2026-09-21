@@ -1,0 +1,278 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { MenuCategory, Product } from '../types';
+
+export type OrderStatus =
+  | 'pending'
+  | 'paid'
+  | 'shipped'
+  | 'delivered'
+  | 'canceled';
+
+export interface OrderItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface Order {
+  id: string;
+  createdAt: string; // ISO
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  items: OrderItem[];
+  subtotal: number;
+  shipping: number;
+  discount: number;
+  total: number;
+  couponCode: string | null;
+  status: OrderStatus;
+  payment: 'card' | 'pix' | 'boleto';
+  channel: 'site' | 'whatsapp' | 'erp';
+  /** Código dos Correios (AA123456789BR). Vazio enquanto não despachado. */
+  trackingCode?: string;
+  /** Último status consultado, para não bater na API a cada abertura da tela. */
+  trackingStatus?: string;
+  /**
+   * Quando o pagamento entrou (ISO), ou null.
+   *
+   * É o que decide se o pedido pode ser apagado — e não `status`, que é
+   * editável no próprio painel: marcar um pedido pago como cancelado não
+   * desfaz o pagamento.
+   */
+  paidAt?: string | null;
+  /** Cobrança gerada e ainda pagável — apagar o pedido perderia esse dinheiro. */
+  hasOpenCharge?: boolean;
+  /** Por que foi cancelado, e por quem (loja, cliente, gateway ou ERP). */
+  cancelReason?: string | null;
+  canceledBy?: string | null;
+}
+
+/** Um evento do rastreio dos Correios. */
+export interface TrackingEvent {
+  data: string;
+  descricao: string;
+  local: string;
+}
+
+export interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  ordersCount: number;
+  totalSpent: number;
+  createdAt: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: 'percent' | 'fixed';
+  value: number; // % ou R$
+  active: boolean;
+  minOrder?: number | null;
+  expiresAt?: string | null;
+  /** Quantas vezes o cupom já foi usado (somente leitura). */
+  uses?: number;
+}
+
+export interface StoreSettings {
+  name: string;
+  email: string;
+  phone: string;
+  whatsapp: string;
+  pixDiscountPct: number;
+  /** Mínimo em produtos para o desconto do Pix valer. 0 = vale sempre. */
+  pixMinOrder: number;
+  payments: { card: boolean; pix: boolean; boleto: boolean };
+}
+
+// ---- Abandoned carts ----
+export type AbandonedStatus = 'open' | 'recovered' | 'discarded';
+
+export interface AbandonedCart {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+  items: OrderItem[];
+  total: number;
+  abandonedAt: string; // ISO
+  status: AbandonedStatus;
+  remindersSent: number;
+}
+
+export interface RecoveryConfig {
+  enabled: boolean;
+  delayMinutes: number; // wait before sending the first reminder
+  message: string; // template, supports {nome} {valor} {cupom}
+  couponCode: string; // coupon offered to recover
+}
+
+// ---- Shipping / delivery ----
+export interface CepRange {
+  id: string;
+  from: string; // 8-digit cep start
+  to: string;   // 8-digit cep end
+  price: number;
+  free?: boolean; // free shipping for this range
+  label?: string;
+}
+
+export interface ShippingConfig {
+  defaultPrice: number;       // fallback flat rate
+  perState: Record<string, number>; // UF -> price (overrides default)
+  cepRanges: CepRange[];      // highest priority
+  freeShipping: {
+    enabled: boolean;
+    minOrder: number;         // free above this cart value
+    states: string[];         // UFs with always-free shipping
+  };
+  /**
+   * Quem entrega quando o frete sai da tabela acima, e não de uma cotação.
+   *
+   * Vai no pedido como `shippingCarrier`, que é por onde o ERP acha a
+   * transportadora no cadastro dele. Vazio é legítimo: com Correios ou Melhor
+   * Envio ligados, a transportadora vem da cotação e este campo é ignorado.
+   */
+  defaultCarrier?: string;
+}
+
+// ---- Integrations ----
+export type IntegrationId =
+  | 'uno'
+  | 'erp'
+  | 'zapi'
+  | 'evolution'
+  | 'chatwoot'
+  | 'chatvolt'
+  // payment gateways
+  | 'mercadopago'
+  | 'pagseguro'
+  | 'stripe'
+  | 'pagarme'
+  // logistics / shipping
+  | 'correios'
+  | 'melhorenvio'
+  | 'frenet';
+
+export interface IntegrationConfig {
+  id: IntegrationId;
+  enabled: boolean;
+  /**
+   * Campos de configuração. Os que são segredo (token, apiKey, secretKey…)
+   * voltam SEMPRE vazios do servidor: a credencial fica cifrada no banco e
+   * nunca trafega para o navegador. Enviar '' num campo secreto significa
+   * "manter o valor atual".
+   */
+  fields: Record<string, string>;
+  /** Nomes dos campos já preenchidos no servidor — inclusive os secretos. */
+  configured?: string[];
+  lastStatus?: 'unknown' | 'connected' | 'error';
+  lastCheckedAt?: string | null;
+}
+
+// ---- Public API (for external tools to consume this store) ----
+export interface ApiKey {
+  id: string;
+  name: string;
+  /** Apenas o prefixo mascarado; o token completo só aparece na criação. */
+  token: string;
+  createdAt: string;
+  lastUsedAt?: string | null;
+  revoked?: boolean;
+}
+
+export interface Webhook {
+  id: string;
+  url: string;
+  event: string; // e.g. 'order.created', 'order.status_changed'
+  active: boolean;
+}
+
+/**
+ * Uma pessoa com acesso ao painel.
+ *
+ * Não há senha aqui, nem mascarada: a senha não sai do servidor de forma
+ * alguma. `isYou` também vem de lá, porque só o servidor sabe de qual sessão a
+ * requisição veio.
+ */
+export interface PanelUser {
+  id: string;
+  name: string;
+  email: string;
+  active: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  isYou: boolean;
+}
+
+/**
+ * Uma categoria como o ERP a enviou, com o estado da amarração.
+ *
+ * `category` nulo significa pendente: o ERP mandou, ninguém decidiu onde ela
+ * entra na loja, e produto que chegar com este código fica fora da vitrine.
+ */
+export interface ErpCategory {
+  code: string;
+  name: string;
+  parentCode: string | null;
+  active: boolean;
+  category: string | null;
+  subcategory: string | null;
+  linked: boolean;
+}
+
+export interface AdminState {
+  /** Taxonomia de categorias, para os seletores do painel. */
+  menu: MenuCategory[];
+  products: Product[];
+  orders: Order[];
+  customers: Customer[];
+  coupons: Coupon[];
+  settings: StoreSettings;
+  integrations: Record<IntegrationId, IntegrationConfig>;
+  abandonedCarts: AbandonedCart[];
+  recovery: RecoveryConfig;
+  apiKeys: ApiKey[];
+  webhooks: Webhook[];
+  shipping: ShippingConfig;
+  users: PanelUser[];
+  erpCategories: ErpCategory[];
+  /**
+   * TODAS as categorias, sem agrupar — inclusive as que já estão dentro de uma
+   * categoria geral, que por definição não aparecem no `menu` do topo.
+   *
+   * É desta lista que a tela de vitrine vive: ela precisa mostrar e mexer
+   * também no que está agrupado, senão a única forma de desagrupar seria
+   * mexendo no banco.
+   */
+  allCategories?: {
+    id: string;
+    name: string;
+    image: string;
+    blurb: string;
+    home: boolean;
+    position: number;
+    manual: boolean;
+    groupId: string | null;
+    featured: boolean;
+  }[];
+  /**
+   * Ids de produtos presos em algum pedido que ainda vale.
+   *
+   * Decide se "excluir" apaga de verdade ou só tira da vitrine. Pedido
+   * CANCELADO não entra: o nome era `productsWithOrders` e contava qualquer
+   * pedido, o que tornava a trava intransponível — cancelar os pedidos não
+   * liberava nada e o produto ficava na lista para sempre.
+   */
+  productsWithActiveOrders: string[];
+  /** Produtos sem categoria — invisíveis na vitrine até a amarração. */
+  productsWithoutCategory: number;
+}

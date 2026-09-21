@@ -1,0 +1,512 @@
+-- =====================================================================
+--  Macsym — esquema do banco (MySQL 5.7+ / MariaDB 10.3+)
+--  Compatível com a Hostinger (utf8mb4, InnoDB, sem recursos exóticos).
+--
+--  Importe pelo phpMyAdmin ou rode:  npm run migrar
+-- =====================================================================
+
+SET NAMES utf8mb4;
+SET time_zone = '-03:00';
+
+-- ---------------------------------------------------------------------
+-- Usuários do painel administrativo
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS admin_users (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name          VARCHAR(120)  NOT NULL,
+  email         VARCHAR(190)  NOT NULL,
+  password_hash VARCHAR(255)  NOT NULL,
+  role          VARCHAR(20)   NOT NULL DEFAULT 'admin',
+  active        TINYINT(1)    NOT NULL DEFAULT 1,
+  last_login_at DATETIME      NULL,
+  created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_admin_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Sessões (cookie httpOnly `qp_session` → estado guardado aqui)
+--
+-- Fica no banco, e não em memória, porque a aplicação Node é reiniciada a cada
+-- deploy e pode rodar em mais de um processo: sessão em memória deslogaria
+-- todo mundo no reinício e "sumiria" a cada requisição que caísse no outro
+-- processo.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS sessions (
+  id         CHAR(64)   NOT NULL,
+  payload    MEDIUMTEXT NOT NULL,
+  created_at DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME   NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_session_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Tentativas de login (rate limiting) — vale para admin e cliente.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  scope      VARCHAR(20)  NOT NULL,          -- 'admin' | 'customer'
+  identifier VARCHAR(190) NOT NULL,          -- e-mail tentado
+  ip         VARBINARY(16) NULL,
+  success    TINYINT(1)   NOT NULL DEFAULT 0,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_attempt_lookup (scope, identifier, created_at),
+  KEY idx_attempt_ip (ip, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Clientes da loja
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS customers (
+  id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  name          VARCHAR(160) NOT NULL,
+  email         VARCHAR(190) NOT NULL,
+  password_hash VARCHAR(255) NULL,           -- NULL = cadastro só no checkout
+  phone         VARCHAR(30)  NOT NULL DEFAULT '',
+  cpf           VARCHAR(20)  NOT NULL DEFAULT '',
+  created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_customer_email (email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS customer_addresses (
+  id           INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  customer_id  INT UNSIGNED NOT NULL,
+  label        VARCHAR(60)  NOT NULL DEFAULT 'Principal',
+  cep          VARCHAR(12)  NOT NULL DEFAULT '',
+  street       VARCHAR(160) NOT NULL DEFAULT '',
+  number       VARCHAR(20)  NOT NULL DEFAULT '',
+  complement   VARCHAR(120) NOT NULL DEFAULT '',
+  neighborhood VARCHAR(120) NOT NULL DEFAULT '',
+  city         VARCHAR(120) NOT NULL DEFAULT '',
+  state        CHAR(2)      NOT NULL DEFAULT 'SP',
+  is_default   TINYINT(1)   NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_addr_customer (customer_id),
+  CONSTRAINT fk_addr_customer FOREIGN KEY (customer_id)
+    REFERENCES customers (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS customer_favorites (
+  customer_id INT UNSIGNED NOT NULL,
+  product_id  VARCHAR(100) NOT NULL,
+  created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (customer_id, product_id),
+  CONSTRAINT fk_fav_customer FOREIGN KEY (customer_id)
+    REFERENCES customers (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Catálogo
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS categories (
+  id          VARCHAR(100) NOT NULL,          -- slug da categoria-mãe
+  name        VARCHAR(120) NOT NULL,
+  description VARCHAR(255) NOT NULL DEFAULT '',
+  icon        VARCHAR(40)  NOT NULL DEFAULT '',
+  featured    TINYINT(1)   NOT NULL DEFAULT 0,
+  position    INT          NOT NULL DEFAULT 0,
+  -- ---------------------------------------------------------------------
+  -- Vitrine da categoria: foto, frase e se aparece na home.
+  --
+  -- A seção "Explore por categoria" era SEIS CARTÕES CRAVADOS no código, com
+  -- id, nome, frase e foto fixos. Depois que a loja passou a espelhar a árvore
+  -- do ERP, esses ids deixaram de existir: os cartões continuavam bonitos na
+  -- home e levavam a uma lista vazia.
+  --
+  -- `home` existe separado de `featured` porque são coisas diferentes:
+  -- `featured` é o destaque do menu (Promoções, Novidades), e este é "mostrar
+  -- na home". Mostrar TODAS seria inviável — o ERP manda dezenas.
+  --
+  -- Estes três campos são da LOJA, não do ERP: o espelhamento os preserva por
+  -- slug, senão cada sincronização apagaria as fotos que alguém subiu à mão.
+  -- ---------------------------------------------------------------------
+  image       VARCHAR(500) NOT NULL DEFAULT '',
+  blurb       VARCHAR(160) NOT NULL DEFAULT '',
+  home        TINYINT(1)   NOT NULL DEFAULT 0,
+  -- ---------------------------------------------------------------------
+  -- Agrupamento feito pela LOJA, por cima do que o ERP manda.
+  --
+  -- O ERP manda "Pirâmides de Cristal", "de Madeira", "de Impressão 3D" como
+  -- categorias SOLTAS, todas no mesmo nível — ele tem o campo de hierarquia e
+  -- não o usa. O resultado é um menu com dezenas de irmãs e nenhuma categoria
+  -- "Pirâmides" para o cliente clicar.
+  --
+  -- `group_id` aponta para outra linha desta mesma tabela: a categoria geral.
+  -- Agrupar NÃO move produto nenhum — cada produto continua apontando para a
+  -- categoria do ERP em que o ERP o colocou, e é a navegação da loja que passa
+  -- a somar os filhos. Assim a integração continua intacta, e desagrupar é
+  -- tirar uma referência, não remexer 1.400 produtos.
+  --
+  -- `manual` marca a categoria criada no painel: o espelhamento do ERP apaga e
+  -- recria as linhas a partir do que o ERP mandou, e apagaria junto a categoria
+  -- geral que o ERP não conhece.
+  -- ---------------------------------------------------------------------
+  group_id    VARCHAR(100) NULL,
+  manual      TINYINT(1)   NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_cat_group (group_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Subcategorias ficam em tabela própria de propósito: alguns slugs se repetem
+-- entre nível-mãe e nível-filho (ex.: "cristais" é categoria E subcategoria).
+-- Numa tabela só, com o slug como chave primária, um sobrescreveria o outro.
+CREATE TABLE IF NOT EXISTS subcategories (
+  parent_id VARCHAR(100) NOT NULL,
+  id        VARCHAR(100) NOT NULL,
+  name      VARCHAR(120) NOT NULL,
+  position  INT          NOT NULL DEFAULT 0,
+  PRIMARY KEY (parent_id, id),
+  KEY idx_subcat_id (id),
+  CONSTRAINT fk_subcat_parent FOREIGN KEY (parent_id)
+    REFERENCES categories (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Categorias do ERP
+-- ---------------------------------------------------------------------
+-- A lista de categorias como o ERP a envia, MAIS a amarração com a árvore da
+-- loja. Duas listas separadas, e não uma só, por um motivo concreto: elas não
+-- são a mesma coisa.
+--
+-- O ERP identifica categoria por código e inclui coisas que não são vitrine
+-- ("Uso Interno", "Matéria Prima"). A loja identifica por slug — que está na
+-- URL pública (/?categoria=piramides) e no sitemap enviado ao Google — e tem
+-- dez categorias curadas, com ícone, ordem e destaque. Adotar o código do ERP
+-- como identidade da loja trocaria essas URLs por /?categoria=0012 e quebraria
+-- tudo o que já está indexado, para resolver um problema que é de integração.
+--
+-- Então: o código é a chave DA INTEGRAÇÃO, o slug continua sendo a identidade
+-- DA LOJA, e esta tabela é a tradução entre os dois.
+--
+-- `category_id` nulo significa "o ERP mandou, ninguém amarrou ainda". Produto
+-- que chegar com esse código é aceito e fica fora da vitrine até alguém
+-- decidir onde ele entra — decisão do dono da loja, não do ERP nem do código.
+CREATE TABLE IF NOT EXISTS erp_categories (
+  code           VARCHAR(60)  NOT NULL,        -- identificador no ERP
+  name           VARCHAR(160) NOT NULL,
+  parent_code    VARCHAR(60)  NULL,            -- hierarquia do lado do ERP
+  -- Amarração feita no painel. Nulo = pendente.
+  category_id    VARCHAR(100) NULL,
+  subcategory_id VARCHAR(100) NULL,
+  -- Desligada no ERP: continua aqui para traduzir produto antigo, mas não deve
+  -- ser oferecida como destino de amarração.
+  active         TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (code),
+  KEY idx_erpcat_mapeada (category_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS products (
+  id                VARCHAR(100)  NOT NULL,
+  sku               VARCHAR(64)   NOT NULL DEFAULT '',
+  name              VARCHAR(255)  NOT NULL,
+  category          VARCHAR(100)  NOT NULL DEFAULT '',
+  subcategory       VARCHAR(100)  NULL,
+  category_label    VARCHAR(120)  NOT NULL DEFAULT '',
+  description       TEXT          NULL,
+  long_description  MEDIUMTEXT    NULL,
+  price             DECIMAL(10,2) NOT NULL DEFAULT 0,
+  old_price         DECIMAL(10,2) NULL,
+  -- Estoque é DECIMAL, e não INT: o ERP trabalha o saldo como número
+  -- fracionário. Truncar 7,5 para 7 na sincronização seria uma divergência
+  -- silenciosa — cada sistema confiante no seu número. Quantidade de item
+  -- vendido continua inteira; saldo, não.
+  stock             DECIMAL(10,3) NOT NULL DEFAULT 0,
+  image             VARCHAR(500)  NOT NULL DEFAULT '',
+  tag               VARCHAR(40)   NULL,
+  -- Peso da peça em QUILOS: é o que o frete usa e o que o ERP envia.
+  weight_kg         DECIMAL(10,3) NOT NULL DEFAULT 0,
+  -- Texto de medida/formato exibido na página do produto ("Base 15cm · cobre").
+  -- Já serviu de peso, e o frete tentava achar o número no meio da frase. Hoje
+  -- é só rótulo: quem manda no frete é weight_kg.
+  weight            VARCHAR(120)  NOT NULL DEFAULT '',
+  ingredients       TEXT          NULL,
+  highlight         TINYINT(1)    NOT NULL DEFAULT 0,
+  active            TINYINT(1)    NOT NULL DEFAULT 1,
+  -- Campos editados no painel, que o ERP não sobrescreve (ex.: "price,stock").
+  -- É o que concilia "o ERP é a fonte da verdade" com "o painel precisa ter
+  -- autonomia": sem isto, o ajuste manual volta sozinho no próximo ciclo.
+  locked_fields     VARCHAR(255)  NOT NULL DEFAULT '',
+  -- Código de categoria que o ERP mandou e a loja ainda não sabia traduzir.
+  --
+  -- Guardar isto é o que permite ao produto entrar na vitrine sozinho no
+  -- instante da amarração, sem o ERP reenviar. Sem a coluna, a loja não teria
+  -- como saber quais produtos estavam esperando por qual código, e um ERP que
+  -- guarda "essa categoria eu já mandei" nunca mais tocaria no assunto — os
+  -- produtos ficariam invisíveis para sempre, sem erro em lugar nenhum.
+  pending_category_code VARCHAR(60) NOT NULL DEFAULT '',
+  position          INT           NOT NULL DEFAULT 0,
+  created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_prod_cat (category, subcategory),
+  KEY idx_prod_active (active),
+  KEY idx_prod_tag (tag)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Fotos extras do produto, além da capa (`products.image`).
+--
+-- Tabela separada, e não uma coluna com lista, porque a ordem importa (é a
+-- ordem em que aparecem na página) e porque uma lista dentro de uma coluna
+-- vira texto que ninguém consegue consultar nem manter consistente.
+--
+-- A capa continua em `products.image`: ela é usada na vitrine, no carrinho e
+-- no e-mail de pedido, e mudar isso mexeria em tudo para resolver nada.
+CREATE TABLE IF NOT EXISTS product_images (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  product_id VARCHAR(100)    NOT NULL,
+  url        VARCHAR(500)    NOT NULL,
+  position   INT             NOT NULL DEFAULT 0,
+  created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_prodimg (product_id, position),
+  CONSTRAINT fk_prodimg_produto FOREIGN KEY (product_id)
+    REFERENCES products (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Pedidos
+--
+-- Colunas de pagamento:
+--   payment_provider  quem processou ('mercadopago')
+--   payment_ref       id da cobrança no provedor. ÚNICO de propósito: é por ele
+--                     que o webhook encontra o pedido, e um mesmo pagamento não
+--                     pode acabar ligado a dois pedidos.
+--   payment_detail    o motivo detalhado do provedor (ex.: cc_rejected_high_risk),
+--                     que é o que explica para a lojista por que a compra falhou
+--   paid_at           quando o dinheiro foi confirmado — só se preenche uma vez
+--   stock_restored    trava: o estoque de um pedido cancelado volta UMA vez.
+--                     Sem isso, dois avisos do provedor para o mesmo pedido
+--                     devolveriam a peça duas vezes e o estoque inflaria sozinho.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS orders (
+  id              VARCHAR(24)   NOT NULL,     -- QP-000123
+  customer_id     INT UNSIGNED  NULL,
+  customer_name   VARCHAR(160)  NOT NULL,
+  customer_email  VARCHAR(190)  NOT NULL,
+  customer_phone  VARCHAR(30)   NOT NULL DEFAULT '',
+  customer_cpf    VARCHAR(20)   NOT NULL DEFAULT '',
+  subtotal        DECIMAL(10,2) NOT NULL DEFAULT 0,
+  shipping_cost   DECIMAL(10,2) NOT NULL DEFAULT 0,
+  discount        DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total           DECIMAL(10,2) NOT NULL DEFAULT 0,
+  coupon_code     VARCHAR(40)   NULL,
+  status          VARCHAR(20)   NOT NULL DEFAULT 'pending',
+  payment         VARCHAR(20)   NOT NULL DEFAULT 'pix',
+  channel         VARCHAR(20)   NOT NULL DEFAULT 'site',
+  ship_cep        VARCHAR(12)   NOT NULL DEFAULT '',
+  ship_street     VARCHAR(160)  NOT NULL DEFAULT '',
+  ship_number     VARCHAR(20)   NOT NULL DEFAULT '',
+  ship_complement VARCHAR(120)  NOT NULL DEFAULT '',
+  ship_neighborhood VARCHAR(120) NOT NULL DEFAULT '',
+  ship_city       VARCHAR(120)  NOT NULL DEFAULT '',
+  ship_state      CHAR(2)       NOT NULL DEFAULT 'SP',
+  delivery_eta    DATE          NULL,
+  -- Transportadora e modalidade escolhidas pelo cliente ("Jadlog · .Package").
+  -- Fica gravado porque é o que a lojista precisa saber para despachar — o
+  -- valor do frete sozinho não diz por onde a encomenda vai.
+  shipping_service VARCHAR(120) NOT NULL DEFAULT '',
+  payment_provider VARCHAR(30)  NOT NULL DEFAULT '',
+  payment_ref     VARCHAR(64)   NULL,
+  payment_detail  VARCHAR(60)   NOT NULL DEFAULT '',
+  paid_at         DATETIME      NULL,
+  stock_restored  TINYINT(1)    NOT NULL DEFAULT 0,
+  -- Rastreio dos Correios: código do objeto (AA123456789BR) e o último status
+  -- consultado, guardado para a conta do cliente não bater na API a cada visita.
+  tracking_code   VARCHAR(40)   NOT NULL DEFAULT '',
+  tracking_status VARCHAR(190)  NOT NULL DEFAULT '',
+  tracking_at     DATETIME      NULL,
+  created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  -- -------------------------------------------------------------------
+  -- Campos que o ERP precisa para faturar, e que o pedido não guardava.
+  --
+  -- DATAS DE TRANSIÇÃO. `paid_at` já existia; faltavam as outras três. Sem
+  -- elas, e sem `updated_at` no filtro, a varredura periódica do ERP só
+  -- enxerga pedido NOVO: um pedido criado ontem e pago hoje, cujo webhook
+  -- falhou, fica parado para sempre — o pior defeito possível aqui.
+  --
+  -- EIXOS SEPARADOS. `status` sozinho colapsa pagamento e logística: quando
+  -- o pedido avança para "shipped", a informação "foi pago" some do campo e
+  -- não há como reconstruí-la. E "canceled" não distingue pagamento recusado
+  -- de desistência do cliente, que geram lançamentos diferentes no ERP.
+  -- `status` continua existindo e mandando; estes são a leitura por eixo.
+  --
+  -- FRETE EM PARTES. O ERP acha a transportadora pelo nome; recebendo
+  -- "PAC — até 7 dias úteis" ele nunca casa e joga tudo na transportadora
+  -- padrão. E `shipping_cost_owner` separa o que a loja PAGA do que ela
+  -- COBRA: iguais hoje, mas se a loja subsidiar frete a margem sai errada.
+  -- -------------------------------------------------------------------
+  shipped_at      DATETIME      NULL,
+  delivered_at    DATETIME      NULL,
+  canceled_at     DATETIME      NULL,
+  payment_status  VARCHAR(20)   NOT NULL DEFAULT 'pending',  -- pending|paid|refused|refunded
+  fulfillment_status VARCHAR(20) NOT NULL DEFAULT 'unpacked', -- unpacked|shipped|delivered
+  cancel_reason   VARCHAR(200)  NOT NULL DEFAULT '',
+  canceled_by     VARCHAR(20)   NOT NULL DEFAULT '',         -- customer|store|gateway|erp
+  payment_brand   VARCHAR(30)   NOT NULL DEFAULT '',         -- visa, master… (cartão)
+  payment_installments INT      NOT NULL DEFAULT 0,
+  paid_amount     DECIMAL(10,2) NULL,
+  shipping_carrier VARCHAR(80)  NOT NULL DEFAULT '',
+  shipping_service_code VARCHAR(40) NOT NULL DEFAULT '',
+  shipping_service_name VARCHAR(80) NOT NULL DEFAULT '',
+  shipping_min_days INT         NOT NULL DEFAULT 0,
+  shipping_max_days INT         NOT NULL DEFAULT 0,
+  shipping_cost_owner DECIMAL(10,2) NULL,
+  tracking_url    VARCHAR(300)  NOT NULL DEFAULT '',
+  -- Desconto repartido por origem: o ERP não sabe separar cupom de Pix a
+  -- partir de um número só, e os dois viram lançamentos diferentes.
+  discount_coupon DECIMAL(10,2) NOT NULL DEFAULT 0,
+  discount_payment DECIMAL(10,2) NOT NULL DEFAULT 0,
+  customer_note   VARCHAR(500)  NOT NULL DEFAULT '',
+  -- Entrega para terceiro, e o país que o ERP hoje chuta como "BRASIL".
+  ship_recipient  VARCHAR(160)  NOT NULL DEFAULT '',
+  ship_phone      VARCHAR(30)   NOT NULL DEFAULT '',
+  ship_country    CHAR(2)       NOT NULL DEFAULT 'BR',
+  currency        CHAR(3)       NOT NULL DEFAULT 'BRL',
+  PRIMARY KEY (id),
+  KEY idx_order_customer (customer_id),
+  KEY idx_order_created (created_at),
+  KEY idx_order_status (status),
+  KEY idx_order_email (customer_email),
+  -- O filtro da varredura do ERP (?updatedSince=) percorre esta coluna.
+  KEY idx_order_updated (updated_at),
+  UNIQUE KEY uq_order_payment_ref (payment_ref)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Itens do pedido.
+--
+-- `sku` é gravado explicitamente, e não deduzido do `product_id`. O ERP casa
+-- produto POR SKU; hoje os dois coincidem porque todo produto nasce no ERP,
+-- mas isso é convenção, não contrato — no dia em que alguém cadastrar um
+-- produto pelo painel da loja, o id deixa de ser um código de produto e a
+-- amarração quebraria em silêncio, item a item.
+--
+-- `quantity` é DECIMAL porque o estoque já é: a loja vende por peso e por
+-- metro, e uma quantidade inteira truncaria 1,5 kg para 1 kg na hora de
+-- faturar.
+--
+-- `total_price` é gravado, e não só calculado na leitura, para o ERP ter
+-- contra o que conferir o arredondamento do subtotal.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS order_items (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  order_id   VARCHAR(24)   NOT NULL,
+  product_id VARCHAR(100)  NOT NULL,
+  sku        VARCHAR(100)  NOT NULL DEFAULT '',
+  name       VARCHAR(255)  NOT NULL,
+  quantity   DECIMAL(10,3) NOT NULL DEFAULT 1,
+  unit_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  discount   DECIMAL(10,2) NOT NULL DEFAULT 0,
+  total_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_item_order (order_id),
+  CONSTRAINT fk_item_order FOREIGN KEY (order_id)
+    REFERENCES orders (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Cupons
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS coupons (
+  id         VARCHAR(40)   NOT NULL,
+  code       VARCHAR(40)   NOT NULL,
+  type       VARCHAR(10)   NOT NULL DEFAULT 'percent',  -- percent | fixed
+  value      DECIMAL(10,2) NOT NULL DEFAULT 0,
+  active     TINYINT(1)    NOT NULL DEFAULT 1,
+  min_order  DECIMAL(10,2) NULL,
+  expires_at DATE          NULL,
+  uses       INT           NOT NULL DEFAULT 0,
+  max_uses   INT           NULL,
+  created_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_coupon_code (code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Carrinhos abandonados
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS abandoned_carts (
+  id             VARCHAR(32)   NOT NULL,
+  customer_name  VARCHAR(160)  NOT NULL DEFAULT '',
+  customer_email VARCHAR(190)  NOT NULL DEFAULT '',
+  customer_phone VARCHAR(30)   NOT NULL DEFAULT '',
+  total          DECIMAL(10,2) NOT NULL DEFAULT 0,
+  status         VARCHAR(20)   NOT NULL DEFAULT 'open', -- open|recovered|discarded
+  reminders_sent INT           NOT NULL DEFAULT 0,
+  abandoned_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_cart_status (status, abandoned_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS abandoned_cart_items (
+  id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  cart_id    VARCHAR(32)   NOT NULL,
+  product_id VARCHAR(100)  NOT NULL,
+  name       VARCHAR(255)  NOT NULL,
+  quantity   INT           NOT NULL DEFAULT 1,
+  unit_price DECIMAL(10,2) NOT NULL DEFAULT 0,
+  PRIMARY KEY (id),
+  KEY idx_acitem_cart (cart_id),
+  CONSTRAINT fk_acitem_cart FOREIGN KEY (cart_id)
+    REFERENCES abandoned_carts (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Integrações (credenciais cifradas com AES-256-GCM)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS integrations (
+  id              VARCHAR(40) NOT NULL,
+  enabled         TINYINT(1)  NOT NULL DEFAULT 0,
+  fields_enc      MEDIUMTEXT  NULL,           -- payload cifrado
+  last_status     VARCHAR(20) NOT NULL DEFAULT 'unknown',
+  last_checked_at DATETIME    NULL,
+  PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- API pública e webhooks
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS api_keys (
+  id           VARCHAR(40)  NOT NULL,
+  name         VARCHAR(120) NOT NULL,
+  token_prefix VARCHAR(24)  NOT NULL,         -- parte visível: qp_live_abcd…
+  token_hash   VARCHAR(255) NOT NULL,         -- hash do token completo
+  revoked      TINYINT(1)   NOT NULL DEFAULT 0,
+  last_used_at DATETIME     NULL,
+  created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_key_prefix (token_prefix)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS webhooks (
+  id         VARCHAR(40)  NOT NULL,
+  url        VARCHAR(500) NOT NULL,
+  event      VARCHAR(60)  NOT NULL,
+  active     TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_wh_event (event, active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- Configurações da loja (chave → JSON)
+--   settings | shipping | recovery
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS store_config (
+  config_key VARCHAR(40) NOT NULL,
+  config_val MEDIUMTEXT  NOT NULL,
+  updated_at DATETIME    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (config_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Contador de pedidos (evita corrida ao gerar o código QP-XXXXXX)
+CREATE TABLE IF NOT EXISTS counters (
+  name  VARCHAR(40)  NOT NULL,
+  value BIGINT       NOT NULL DEFAULT 0,
+  PRIMARY KEY (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

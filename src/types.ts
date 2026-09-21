@@ -1,0 +1,102 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export interface Product {
+  id: string;
+  name: string;
+  category: string; // slug da categoria-mãe, ex.: 'piramides', 'cristais'
+  subcategory?: string; // slug da subcategoria, ex.: 'piramides-de-cobre'
+  categoryLabel: string; // rótulo exibido, ex.: 'Pirâmides de Cobre'
+  description: string;
+  longDescription?: string;
+  price: number;
+  oldPrice?: number; // original price when on sale (renders strikethrough + % off)
+  /** Saldo em estoque. Pode ter fração: o ERP trabalha o saldo assim. */
+  stock?: number;
+  image: string;
+  highlight?: boolean;
+  tag?: string; // ex.: 'DESTAQUE', 'NOVIDADE'
+  /**
+   * Peso da peça em QUILOS — é o que a cotação de frete usa.
+   *
+   * Era texto livre fazendo dois papéis ao mesmo tempo: rótulo na vitrine e
+   * peso para o frete. Como texto, ninguém lia "0,2kg" como número — nem o
+   * ERP, nem o próprio cálculo de frete, que garimpava o valor no meio da
+   * frase. O rótulo passou a ser `weightLabel`.
+   */
+  weight: number;
+  /** Medida/formato exibido na vitrine, ex.: 'Base 15cm · cobre'. Só texto. */
+  weightLabel?: string;
+  /**
+   * Fotos extras, além da capa (`image`), na ordem de exibição.
+   *
+   * A capa NÃO entra aqui: ela é usada sozinha na vitrine, no carrinho e no
+   * e-mail de pedido. Repeti-la obrigaria cada um desses lugares a saber que o
+   * primeiro item é especial, e alguém acabaria mostrando a mesma foto duas
+   * vezes.
+   */
+  images?: string[];
+  sku: string;
+  /** Materiais e composição da peça. */
+  ingredients?: string;
+  /** false = fora da vitrine (exclusão suave). Só o painel recebe este campo. */
+  active?: boolean;
+}
+
+export interface CartItem {
+  product: Product;
+  quantity: number;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  description: string;
+}
+
+// Mega-menu taxonomy
+export interface SubCategory {
+  id: string;
+  name: string;
+  /**
+   * Verdadeiro quando este item do segundo nível é, ele próprio, uma
+   * CATEGORIA agrupada — e não uma subcategoria.
+   *
+   * O ERP manda categorias soltas ("Pirâmides de Cristal", "de Madeira"); a
+   * loja as pendura numa categoria geral sem mover produto nenhum. Filtrar por
+   * uma delas é comparar com `product.category`, e não com `product.subcategory`.
+   */
+  isCategory?: boolean;
+}
+
+export interface MenuCategory {
+  id: string;
+  name: string;
+  icon: string; // lucide icon name
+  featured?: boolean; // highlighted entry (e.g. Promoções, Novidades)
+  /**
+   * Vitrine da categoria, editada em Painel → Vitrine das Categorias.
+   *
+   * `home` decide quem aparece na seção "Explore por categoria". Ela era seis
+   * cartões cravados no código, com ids que deixaram de existir quando a loja
+   * passou a espelhar a árvore do ERP — os cartões levavam a uma lista vazia.
+   */
+  image?: string;
+  blurb?: string;
+  home?: boolean;
+  position?: number;
+  /** Criada no painel (categoria geral), e não vinda do ERP. */
+  manual?: boolean;
+  /** Categoria geral em que esta está pendurada, ou null. */
+  groupId?: string | null;
+  subcategories: SubCategory[];
+}
+
+export interface ValueProp {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+}

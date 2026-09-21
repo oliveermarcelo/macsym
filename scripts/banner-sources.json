@@ -1,0 +1,14 @@
+{
+  "_comentario": "Origem das imagens editoriais. O script scripts/download-images.mjs baixa cada URL para public/banners/<arquivo>. Todas vêm do site atual da Macsym (camerasdevideo.com.br) — troque a URL aqui quando houver arte definitiva, ou simplesmente substitua o arquivo em public/banners/.",
+  "arquivos": {
+    "hero-cameras.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/videoconferencia-cam.jpg",
+    "hero-microfones.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/1627550898.jpg",
+    "hero-controladoras.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/controladora.jpg",
+    "promo.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/33.png",
+    "categoria-cameras-ptz.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/10/PTZ-G320U3.webp",
+    "categoria-microfones.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/MTE-A3000.png",
+    "categoria-mesa-controladora.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/55.png",
+    "categoria-webcam.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/cc600.jpg",
+    "categoria-acessorios.jpg": "https://camerasdevideo.com.br/wp-content/uploads/2025/05/D_NQ_NP_2X_957627-MLB77914624226_082024-F.webp"
+  }
+}
