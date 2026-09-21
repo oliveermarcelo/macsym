@@ -44,7 +44,14 @@ const BASE = arg('base', 'https://camerasdevideo.com.br').replace(/\/+$/, '');
  * Aqui só existem cinco seções, e cada uma escolhe à mão as características
  * que viram subcategoria. O resto continua no produto — só não vira item de
  * menu. A ORDEM de MAES importa: um produto costuma cair em várias listas, e
- * fica na primeira que casar (a câmera 360 é webcam, não PTZ).
+ * fica na primeira que casar. Por isso a câmera 360 é webcam e não PTZ, e por
+ * isso Acessórios vem antes de Câmeras PTZ: um suporte de parede é marcado
+ * também como "Câmeras PTZ" lá no WooCommerce, e sem essa ordem ele entrava
+ * na vitrine como se fosse câmera.
+ *
+ * "outros" e "uncategorized" NÃO são marcadores de Acessórios: metade do
+ * catálogo carrega uma dessas por descuido de cadastro, inclusive câmeras.
+ * Quem não casa com nenhuma seção cai na última da lista, que é Acessórios.
  */
 const MAES = [
   {
@@ -70,6 +77,17 @@ const MAES = [
       ['resolucao-4k-webcam', 'Resolução 4K'],
       ['resolucao-2k-webcam', 'Resolução 2K'],
       ['resolucao-1080p-webcam', 'Full HD 1080p'],
+    ],
+  },
+  {
+    id: 'acessorios',
+    name: 'Acessórios',
+    icon: 'Cable',
+    description: 'Suportes, cabos, lâmpadas e o que completa a instalação',
+    marcadores: ['suporte', 'lampada'],
+    subs: [
+      ['suporte', 'Suportes'],
+      ['lampada', 'Lâmpadas'],
     ],
   },
   {
@@ -109,17 +127,6 @@ const MAES = [
       ['boya', 'Linha BOYA'],
     ],
   },
-  {
-    id: 'acessorios',
-    name: 'Acessórios',
-    icon: 'Cable',
-    description: 'Suportes, cabos, lâmpadas e o que completa a instalação',
-    marcadores: ['suporte', 'lampada', 'outros', 'uncategorized'],
-    subs: [
-      ['suporte', 'Suportes'],
-      ['lampada', 'Lâmpadas'],
-    ],
-  },
 ];
 
 const limpar = (html) =>
@@ -138,6 +145,25 @@ const limpar = (html) =>
     .trim();
 
 const corta = (txt, max) => (txt.length <= max ? txt : `${txt.slice(0, max - 1).trimEnd()}…`);
+
+/*
+ * Tira do começo do texto o que é aviso de cadastro, não descrição.
+ *
+ * Vários produtos abrem com "Descrição" (rótulo do tema que virou conteúdo) e
+ * com o aviso de ICMS/substituição tributária EM CAIXA ALTA. Na vitrine nova
+ * esse aviso já aparece no bloco de garantias, e como primeira frase da ficha
+ * ele empurra para baixo a única coisa que o cliente quer ler ali: o que o
+ * equipamento faz. O aviso continua no texto longo, onde é informação; só
+ * deixa de ser a abertura.
+ */
+const AVISO_FISCAL =
+  /FATURAMENTO PARA CNPJ.*?(REALIZAR A COMPRA\.|FINALIZAR A COMPRA\.|COMPRA\.)/is;
+const semRuido = (txt) =>
+  txt
+    .replace(/^Descrição\s+/i, '')
+    .replace(AVISO_FISCAL, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 async function buscarTudo(rota) {
   const itens = [];
@@ -168,7 +194,10 @@ const produtosSaida = [];
 
 for (const p of produtos) {
   const slugs = (p.categories || []).map((c) => c.slug);
-  const mae = MAES.find((m) => m.marcadores.some((s) => slugs.includes(s))) ?? MAES.at(-1);
+  // Quem não casa com nenhuma seção vai para Acessórios — o balaio honesto.
+  const mae =
+    MAES.find((m) => m.marcadores.some((s) => slugs.includes(s))) ??
+    MAES.find((m) => m.id === 'acessorios');
   const sub = mae.subs.find(([slug]) => slugs.includes(slug));
 
   const preco = Number(p.prices?.price ?? 0) / 100;
@@ -182,7 +211,7 @@ for (const p of produtos) {
   // painel, com o que falta à vista, e a lojista publica quando completar.
   const publicavel = Boolean(preco && capa);
 
-  const curta = limpar(p.short_description) || limpar(p.description);
+  const curta = semRuido(limpar(p.short_description) || limpar(p.description));
   const longa = limpar(p.description);
 
   produtosSaida.push({
@@ -203,6 +232,34 @@ for (const p of produtos) {
     active: publicavel,
     highlight: false,
   });
+}
+
+/*
+ * Etiquetas: é o que alimenta "Destaques" e "Novidades" na vitrine.
+ *
+ * A vitrine decide por `tag`: 'NOVIDADE' vai para Novidades, qualquer outra
+ * etiqueta vai para Destaques. Sem isso as duas seções da home nascem vazias,
+ * com o menu levando a uma lista sem nada.
+ *
+ * Novidade é o que foi cadastrado por último — o id do WooCommerce é
+ * incremental, então os maiores são os mais recentes. Oferta é quem tem preço
+ * "de/por" de verdade.
+ */
+const NOVIDADES = 4;
+// Acessório não é novidade de vitrine: um suporte de parede recém-cadastrado
+// não vale a seção. Novidade é equipamento.
+const publicaveis = produtosSaida.filter((p) => p.active && p.category !== 'acessorios');
+const recentes = new Set(
+  [...publicaveis]
+    .sort((a, b) => Number(b.id.slice(3)) - Number(a.id.slice(3)))
+    .slice(0, NOVIDADES)
+    .map((p) => p.id),
+);
+for (const p of produtosSaida) {
+  if (!p.active) continue;
+  if (recentes.has(p.id)) p.tag = 'NOVIDADE';
+  else if (p.oldPrice) p.tag = 'OFERTA';
+  if (p.tag) p.highlight = true;
 }
 
 // Só entra no menu a subcategoria que tem produto: item de menu que leva a

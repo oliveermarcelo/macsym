@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   ArrowLeft, ShoppingCart, Check, Info, Shield, Award,
-  Truck, ChevronRight, Star, Heart, Share2, Minus, Plus,
+  Truck, ChevronRight, Heart, Share2, Minus, Plus,
   QrCode, CreditCard, BadgeCheck, Leaf, Clock, Package,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -212,11 +212,16 @@ export default function ProductDetailPage({
     }
   };
 
-  // Deterministic-but-pleasant rating from the SKU so it stays stable per product.
-  const rating = useMemo(() => {
-    const seed = [...(product.sku || product.id)].reduce((a, c) => a + c.charCodeAt(0), 0);
-    return { stars: 4.5 + (seed % 5) / 10, count: 40 + (seed % 160) };
-  }, [product]);
+  /*
+   * A nota e a contagem de avaliações que ficavam aqui eram INVENTADAS: um
+   * número derivado do SKU, sempre entre 4,5 e 4,9, com "40 a 200 avaliações"
+   * que nunca existiram. Numa loja de verdade isso é propaganda enganosa — o
+   * cliente decide a compra por uma reputação que ninguém escreveu —, então a
+   * linha saiu inteira.
+   *
+   * Quando houver avaliação real (do próprio painel ou de um serviço externo),
+   * o lugar de mostrá-la é este, lendo do pedido entregue.
+   */
 
   return (
     <div id="single-product-page-detail" className="pt-40 lg:pt-44 pb-20 bg-brand-cream text-left">
@@ -373,22 +378,6 @@ export default function ProductDetailPage({
                 <h1 className="text-2xl sm:text-[2rem] font-extrabold text-gray-900 leading-[1.15] tracking-tight">
                   {product.name}
                 </h1>
-
-                {/* Rating row */}
-                <div className="flex items-center gap-2.5">
-                  <div className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <Star
-                        key={i}
-                        className="w-4 h-4 text-brand-accent-300"
-                        fill={i <= Math.round(rating.stars) ? 'currentColor' : 'none'}
-                        strokeWidth={i <= Math.round(rating.stars) ? 0 : 1.5}
-                      />
-                    ))}
-                  </div>
-                  <span className="text-sm font-bold text-gray-700">{rating.stars.toFixed(1)}</span>
-                  <span className="text-xs text-gray-400">({rating.count} avaliações)</span>
-                </div>
 
                 <p className="text-[15px] text-gray-500 leading-relaxed pt-1">
                   {product.description}

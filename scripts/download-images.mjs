@@ -41,9 +41,23 @@ let downloaded = 0;
 let reused = 0;
 let failed = [];
 
+/*
+ * Capa e galeria, na mesma passada.
+ *
+ * A galeria ficava de fora e isso era uma bomba-relógio nesta loja: o site
+ * novo assume o MESMO domínio do WordPress atual, então no dia da virada as
+ * URLs /wp-content/uploads/... deixam de existir e a página do produto perde
+ * todas as fotos menos a capa — justamente onde o cliente olha antes de
+ * comprar um equipamento de alguns milhares de reais.
+ */
+const paraBaixar = [];
 for (const product of catalog.products) {
-  const url = product.image;
-  if (!url || !/^https?:\/\//i.test(url)) continue;
+  for (const url of [product.image, ...(product.images ?? [])]) {
+    if (url && /^https?:\/\//i.test(url)) paraBaixar.push([product, url]);
+  }
+}
+
+for (const [product, url] of paraBaixar) {
   if (mapping.has(url)) continue;
 
   const name = fileNameFor(product, url);
@@ -78,6 +92,9 @@ process.stdout.write('\n');
 for (const product of catalog.products) {
   const local = mapping.get(product.image);
   if (local) product.image = local;
+  if (Array.isArray(product.images)) {
+    product.images = product.images.map((u) => mapping.get(u) ?? u);
+  }
 }
 writeFileSync(catalogPath, JSON.stringify(catalog, null, 2), 'utf8');
 

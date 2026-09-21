@@ -41,7 +41,7 @@ export default function Hero({ onOpenProducts, onSelectCategory }: HeroProps) {
       cta: 'Ver câmeras PTZ',
       action: () => onSelectCategory('cameras-ptz'),
       image: BANNERS.heroCameras,
-      tint: 'from-brand-900/95 from-30% via-brand-700/85 via-58% to-brand-300/60',
+      tint: 'from-brand-900/95 from-22% via-brand-900/70 via-52% to-brand-900/15',
     },
     {
       id: 'microfones',
@@ -52,7 +52,7 @@ export default function Hero({ onOpenProducts, onSelectCategory }: HeroProps) {
       cta: 'Ver microfones',
       action: () => onSelectCategory('microfones'),
       image: BANNERS.heroMicrofones,
-      tint: 'from-brand-900/95 from-42% via-brand-600/85 via-68% to-brand-200/58',
+      tint: 'from-brand-900/95 from-26% via-brand-800/65 via-56% to-brand-800/10',
     },
     {
       id: 'mesa-controladora',
@@ -63,7 +63,7 @@ export default function Hero({ onOpenProducts, onSelectCategory }: HeroProps) {
       cta: 'Ver controladoras',
       action: () => onSelectCategory('mesa-controladora'),
       image: BANNERS.heroControladoras,
-      tint: 'from-brand-900/94 from-30% via-brand-500/80 via-62% to-brand-300/52',
+      tint: 'from-brand-900/94 from-22% via-brand-700/60 via-54% to-brand-700/10',
     },
   ];
 

@@ -52,15 +52,21 @@ interface CatalogProduct {
   image?: string;
   tag?: string;
   /**
-   * No catálogo de origem o peso é texto ("0,2 kg", "Base 15cm · cobre"),
-   * porque veio de cadastro feito à mão. A carga separa as duas coisas: o
-   * número vai para `weight_kg` e o texto continua como rótulo de vitrine.
+   * O peso aparece nos dois formatos que o catálogo já teve: número em quilos
+   * (o que `src/types.ts` declara hoje, e o que a importação do WooCommerce
+   * gera) ou texto de cadastro feito à mão ("0,2 kg", "Base 15cm · cobre").
+   * A carga separa as duas coisas: o número vai para `weight_kg` e o texto
+   * fica como rótulo de vitrine.
    */
-  weight?: string;
+  weight?: string | number;
+  /** Rótulo de vitrine no formato atual, quando o peso já é número. */
+  weightLabel?: string;
   /** Peso em quilos, quando o catálogo já traz o número pronto. */
   weightKg?: number;
   ingredients?: string;
   highlight?: boolean;
+  /** false mantém o produto fora da vitrine (entra no painel para ser completado). */
+  active?: boolean;
 }
 
 interface Catalog {
@@ -141,7 +147,7 @@ async function importCatalog(dir: string): Promise<void> {
           id, sku, name, category, subcategory, category_label, description, long_description,
           price, old_price, stock, image, tag, weight_kg, weight, ingredients,
           highlight, active, position
-       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)
+       ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE
           sku=VALUES(sku), name=VALUES(name), category=VALUES(category),
           subcategory=VALUES(subcategory), category_label=VALUES(category_label),
@@ -149,7 +155,7 @@ async function importCatalog(dir: string): Promise<void> {
           price=VALUES(price), old_price=VALUES(old_price), image=VALUES(image),
           tag=VALUES(tag), weight_kg=VALUES(weight_kg), weight=VALUES(weight),
           ingredients=VALUES(ingredients),
-          highlight=VALUES(highlight), position=VALUES(position)`,
+          highlight=VALUES(highlight), active=VALUES(active), position=VALUES(position)`,
       [
         p.id, p.sku ?? '', p.name, p.category ?? '', p.subcategory ?? null,
         p.categoryLabel ?? '', p.description ?? '', p.longDescription ?? null,
@@ -175,7 +181,15 @@ async function importCatalog(dir: string): Promise<void> {
             ? Math.round(p.weight * 1000) / 1000
             : Math.max(0, pesoEmGramas(typeof p.weight === 'string' ? p.weight : '', -1)) / 1000,
         p.weightLabel ?? (typeof p.weight === 'string' ? p.weight : ''), p.ingredients ?? null,
-        p.highlight ? 1 : 0, i,
+        p.highlight ? 1 : 0,
+        /*
+         * `active` vem do catálogo quando ele diz algo: a importação do site
+         * antigo marca como inativo o que não pode ir para a vitrine (sem
+         * preço ou sem foto). Antes isto era `1` cravado no SQL, e três
+         * produtos quebrados entravam publicados — um deles anunciando
+         * R$ 0,00. Omitido, continua publicando, que é o caso normal.
+         */
+        p.active === false ? 0 : 1, i,
       ],
     );
     i++;
