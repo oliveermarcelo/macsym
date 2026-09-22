@@ -98,6 +98,7 @@ const EMPTY: AdminState = {
   products: [], orders: [], customers: [], coupons: [],
   settings: {
     name: '', email: '', phone: '', whatsapp: '',
+    address: '', city: '', hours: '', legalName: '', cnpj: '',
     pixDiscountPct: 0,
     pixMinOrder: 0,
     payments: { card: true, pix: true, boleto: true },

@@ -9,7 +9,8 @@ import {
   CreditCard, QrCode, Barcode, ShieldCheck, ArrowRight, Send,
 } from 'lucide-react';
 import { LOGO } from '../media';
-import { LOJA } from '../config';
+import { telLink, whatsappLink } from '../config';
+import { useCatalog } from '../catalog/CatalogContext';
 import { LEGAL_DOCS, LegalDoc } from '../legal';
 
 interface FooterProps {
@@ -19,6 +20,18 @@ interface FooterProps {
 }
 
 export default function Footer({ onOpenStory, onOpenCertifications, onOpenLegal }: FooterProps) {
+  // Contato e identificação legal vêm do painel; campo vazio não é exibido.
+  const cfg = useCatalog().settings;
+  const loja = {
+    email: cfg?.email ?? '',
+    phone: cfg?.phone ?? '',
+    whatsapp: cfg?.whatsapp ?? '',
+    address: cfg?.address ?? '',
+    city: cfg?.city ?? '',
+    hours: cfg?.hours ?? '',
+    legalName: cfg?.legalName ?? '',
+    cnpj: cfg?.cnpj ?? '',
+  };
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterStatus, setNewsletterStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
@@ -96,15 +109,19 @@ export default function Footer({ onOpenStory, onOpenCertifications, onOpenLegal 
                   <Icon size={17} />
                 </a>
               ))}
-              <a
-                href={LOJA.whatsapp}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#25D366] flex items-center justify-center text-white/80 hover:text-white transition-colors"
-                title="WhatsApp"
-              >
-                <Phone size={16} />
-              </a>
+              {/* Sem número cadastrado o botão sairia com href vazio, que
+                  recarrega a página e parece defeito. */}
+              {loja.whatsapp && (
+                <a
+                  href={whatsappLink(loja.whatsapp)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-9 h-9 rounded-full bg-white/10 hover:bg-[#25D366] flex items-center justify-center text-white/80 hover:text-white transition-colors"
+                  title="WhatsApp"
+                >
+                  <Phone size={16} />
+                </a>
+              )}
             </div>
           </div>
 
@@ -158,23 +175,36 @@ export default function Footer({ onOpenStory, onOpenCertifications, onOpenLegal 
           {/* Atendimento */}
           <div className="col-span-2 lg:col-span-3">
             <h4 className="font-bold text-sm mb-4">Atendimento</h4>
+            {/*
+              Cada linha só existe se a loja preencheu o campo em
+              Painel → Configurações. Uma lista com "(00) 00000-0000" e
+              "Endereço a confirmar" é pior do que uma lista curta.
+            */}
             <ul className="space-y-3 text-sm text-white/60">
-              <li className="flex items-start gap-2.5">
-                <Phone size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
-                <a href={LOJA.telefoneLink} className="hover:text-brand-accent-300 transition-colors">{LOJA.telefone}</a>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <Mail size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
-                <a href={`mailto:${LOJA.email}`} className="hover:text-brand-accent-300 transition-colors break-all">{LOJA.email}</a>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <Clock size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
-                <span>{LOJA.horario}</span>
-              </li>
-              <li className="flex items-start gap-2.5">
-                <MapPin size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
-                <span>{LOJA.endereco}<br />{LOJA.cidade}</span>
-              </li>
+              {loja.phone && (
+                <li className="flex items-start gap-2.5">
+                  <Phone size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
+                  <a href={telLink(loja.phone)} className="hover:text-brand-accent-300 transition-colors">{loja.phone}</a>
+                </li>
+              )}
+              {loja.email && (
+                <li className="flex items-start gap-2.5">
+                  <Mail size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
+                  <a href={`mailto:${loja.email}`} className="hover:text-brand-accent-300 transition-colors break-all">{loja.email}</a>
+                </li>
+              )}
+              {loja.hours && (
+                <li className="flex items-start gap-2.5">
+                  <Clock size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
+                  <span>{loja.hours}</span>
+                </li>
+              )}
+              {(loja.address || loja.city) && (
+                <li className="flex items-start gap-2.5">
+                  <MapPin size={16} className="text-brand-accent-300 mt-0.5 flex-shrink-0" />
+                  <span>{loja.address}{loja.address && loja.city && <br />}{loja.city}</span>
+                </li>
+              )}
             </ul>
           </div>
         </div>
@@ -201,7 +231,7 @@ export default function Footer({ onOpenStory, onOpenCertifications, onOpenLegal 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 text-center sm:flex sm:items-center sm:justify-between text-[11px] text-white/40 gap-4">
           <p>© {new Date().getFullYear()} Macsym. Todos os direitos reservados.</p>
           <p className="font-mono mt-2 sm:mt-0">
-            {LOJA.razaoSocial} · {LOJA.cnpj}
+            {[loja.legalName, loja.cnpj && `CNPJ ${loja.cnpj}`].filter(Boolean).join(' · ')}
             <a href="/admin" className="ml-2 text-white/30 hover:text-brand-accent-300 transition-colors">· Admin</a>
           </p>
         </div>

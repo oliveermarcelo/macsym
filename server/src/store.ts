@@ -13,6 +13,22 @@ export interface StoreSettings {
   email: string;
   phone: string;
   whatsapp: string;
+  /*
+   * Identificação do fornecedor, exibida no topo e no rodapé da vitrine.
+   *
+   * Estava cravada em `src/config.ts`, o que obrigava um deploy para trocar um
+   * telefone — e fez a loja nascer anunciando "(00) 00000-0000". Aqui a
+   * lojista edita em Painel → Configurações, e a vitrine OMITE o que estiver
+   * vazio: rodapé sem endereço é melhor que rodapé com endereço inventado.
+   *
+   * Razão social e CNPJ não são decoração: o Código de Defesa do Consumidor
+   * exige que a loja virtual identifique quem está vendendo.
+   */
+  address: string;
+  city: string;
+  hours: string;
+  legalName: string;
+  cnpj: string;
   pixDiscountPct: number;
   /**
    * Valor mínimo em PRODUTOS para o desconto do Pix valer. 0 = sempre vale.
@@ -68,8 +84,16 @@ export interface RecoveryConfig {
 export const DEFAULT_SETTINGS: StoreSettings = {
   name: 'Macsym',
   email: 'contato@camerasdevideo.com.br',
-  phone: '(11) 0000-0000',
-  whatsapp: '5511000000000',
+  // Vazio de propósito: a vitrine esconde o que não foi preenchido, e um
+  // telefone de exemplo publicado é pior que telefone nenhum — o cliente liga
+  // e não chama ninguém.
+  phone: '',
+  whatsapp: '',
+  address: '',
+  city: '',
+  hours: '',
+  legalName: 'Macsym Tecnologia Eletrônica',
+  cnpj: '59.312.165/0001-41',
   pixDiscountPct: 5.0,
   // 0 mantém o comportamento de antes: desconto em qualquer valor.
   pixMinOrder: 0,
@@ -197,6 +221,11 @@ export async function publicSettings(exec: Q = q): Promise<Record<string, unknow
     email: s.email,
     phone: s.phone,
     whatsapp: s.whatsapp,
+    address: s.address ?? '',
+    city: s.city ?? '',
+    hours: s.hours ?? '',
+    legalName: s.legalName ?? '',
+    cnpj: s.cnpj ?? '',
     pixDiscountPct: Number(s.pixDiscountPct) || 0,
     // 0 = o desconto do Pix vale em qualquer valor.
     pixMinOrder: Number(s.pixMinOrder ?? 0) || 0,

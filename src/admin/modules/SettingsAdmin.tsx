@@ -46,7 +46,36 @@ export default function SettingsAdmin() {
           <Field label="WhatsApp (com DDI/DDD)">
             <input value={form.whatsapp} onChange={(e) => set({ whatsapp: e.target.value })} placeholder="5511999999999" className={inputCls} />
           </Field>
+          <Field label="Horário de atendimento">
+            <input value={form.hours ?? ''} onChange={(e) => set({ hours: e.target.value })} placeholder="Seg a Sex, 9h às 18h" className={inputCls} />
+          </Field>
+          <Field label="Endereço">
+            <input value={form.address ?? ''} onChange={(e) => set({ address: e.target.value })} placeholder="Rua, número, complemento" className={inputCls} />
+          </Field>
+          <Field label="Cidade, UF e CEP">
+            <input value={form.city ?? ''} onChange={(e) => set({ city: e.target.value })} placeholder="São Paulo, SP — CEP 00000-000" className={inputCls} />
+          </Field>
         </div>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          O que ficar em branco some da vitrine — rodapé sem telefone é melhor
+          que rodapé com telefone que não chama ninguém.
+        </p>
+      </Card>
+
+      <Card className="p-6 space-y-4">
+        <h2 className="font-bold text-gray-800">Identificação legal</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Field label="Razão social">
+            <input value={form.legalName ?? ''} onChange={(e) => set({ legalName: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label="CNPJ">
+            <input value={form.cnpj ?? ''} onChange={(e) => set({ cnpj: e.target.value })} placeholder="00.000.000/0000-00" className={inputCls} />
+          </Field>
+        </div>
+        <p className="text-xs text-gray-500 leading-relaxed">
+          Aparecem no rodapé e nos documentos legais. O Código de Defesa do
+          Consumidor exige que a loja virtual identifique quem está vendendo.
+        </p>
       </Card>
 
       <Card className="p-6 space-y-4">

@@ -87,6 +87,12 @@ export interface StoreSettings {
   email: string;
   phone: string;
   whatsapp: string;
+  /** Identificação do fornecedor exibida na vitrine. Vazio some da tela. */
+  address: string;
+  city: string;
+  hours: string;
+  legalName: string;
+  cnpj: string;
   pixDiscountPct: number;
   /** Mínimo em produtos para o desconto do Pix valer. 0 = vale sempre. */
   pixMinOrder: number;

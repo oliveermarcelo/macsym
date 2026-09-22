@@ -21,35 +21,30 @@
 export const INSTALLMENTS = 10;
 
 /**
- * Contato da loja.
+ * Contato e identificação legal SAÍRAM daqui.
  *
- * Ficam aqui porque o telefone aparecia escrito à mão em três formatos
- * diferentes — no topo, no rodapé e no link do WhatsApp.
+ * Eram constantes de código, o que obrigava um deploy para trocar um telefone
+ * — e fez a loja nascer publicando "(00) 00000-0000". Agora vivem em
+ * Painel → Configurações, chegam à vitrine junto com o catálogo
+ * (`GET /api/catalog` → `settings`) e são lidos pelo `useCatalog()`.
  *
- * PENDENTE DO CLIENTE: telefone, WhatsApp, e-mail e endereço abaixo são
- * provisórios — o site atual (camerasdevideo.com.br) não publica nenhum deles,
- * e a página "Contato" de lá ainda está com o texto de exemplo do tema.
- * Confirme com a Macsym antes de publicar: um telefone que não chama ninguém
- * custa venda, e o endereço do fornecedor é exigência do Código de Defesa do
- * Consumidor numa loja virtual.
+ * O que estiver vazio não aparece: rodapé sem endereço é melhor que rodapé
+ * com endereço inventado.
+ *
+ * Helpers para montar os links a partir do que a lojista digitou.
  */
-export const LOJA = {
-  /** Como o número é lido por uma pessoa. */
-  telefone: '(00) 00000-0000',
-  /** O mesmo número no formato que o `tel:` exige. */
-  telefoneLink: 'tel:+550000000000',
-  /** E no formato do WhatsApp: código do país, DDD e número, sem sinais. */
-  whatsapp: 'https://wa.me/550000000000',
-  email: 'contato@camerasdevideo.com.br',
-  horario: 'Seg a Sex, 9h às 18h',
-  endereco: 'Endereço a confirmar',
-  cidade: 'Cidade/UF — CEP a confirmar',
-  /*
-   * Razão social e CNPJ, como constam nos documentos legais da loja.
-   *
-   * Estes dois vieram do rodapé do site atual e são os únicos dados de
-   * identificação que a Macsym publica hoje.
-   */
-  razaoSocial: 'Macsym Tecnologia Eletrônica',
-  cnpj: 'CNPJ 59.312.165/0001-41',
-} as const;
+
+/** "(11) 99867-0049" → "tel:+5511998670049". Vazio quando não há número. */
+export function telLink(telefone: string): string {
+  const digitos = (telefone ?? '').replace(/\D/g, '');
+  if (digitos.length < 10) return '';
+  // Sem DDI digitado, assume Brasil — é o público da loja.
+  return `tel:+${digitos.length > 11 ? digitos : '55' + digitos}`;
+}
+
+/** "5511999999999" → "https://wa.me/5511999999999". Vazio quando não há. */
+export function whatsappLink(numero: string): string {
+  const digitos = (numero ?? '').replace(/\D/g, '');
+  if (digitos.length < 10) return '';
+  return `https://wa.me/${digitos.length > 11 ? digitos : '55' + digitos}`;
+}

@@ -17,7 +17,14 @@ export interface StorePublicSettings {
   name: string;
   email: string;
   phone: string;
+  /** Só dígitos, com DDI: 5511999999999. Vazio quando não configurado. */
   whatsapp: string;
+  /** Identificação do fornecedor. Campo vazio não é exibido na vitrine. */
+  address: string;
+  city: string;
+  hours: string;
+  legalName: string;
+  cnpj: string;
   pixDiscountPct: number;
   /**
    * Mínimo em PRODUTOS para o desconto do Pix valer; 0 quando vale sempre.

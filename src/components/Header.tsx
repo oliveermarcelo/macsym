@@ -9,7 +9,8 @@ import { AnimatePresence } from 'motion/react';
 import { LOGO } from '../media';
 import MegaMenu, { MegaMenuMobile } from './MegaMenu';
 import { brlNumber } from '../utils/currency';
-import { INSTALLMENTS, LOJA } from '../config';
+import { INSTALLMENTS, telLink } from '../config';
+import { useCatalog } from '../catalog/CatalogContext';
 
 interface HeaderProps {
   cartCount: number;
@@ -38,6 +39,8 @@ export default function Header({
 }: HeaderProps) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Contato vem do painel (Configurações), não do código.
+  const telefone = useCatalog().settings?.phone ?? '';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -179,14 +182,19 @@ export default function Header({
                 <CreditCard size={15} className="text-primary-blue" />
                 Em até <strong className="text-gray-700">{INSTALLMENTS}x sem juros</strong>
               </span>
-              <span className="w-px h-4 bg-gray-150" />
-              <a
-                href={LOJA.telefoneLink}
-                className="inline-flex items-center gap-1.5 text-xs font-medium hover:text-primary-blue transition-colors"
-              >
-                <Headset size={15} className="text-primary-blue" />
-                Atendimento <strong className="text-gray-700">{LOJA.telefone}</strong>
-              </a>
+              {/* Telefone só aparece quando a loja cadastrou um. */}
+              {telefone && (
+                <>
+                  <span className="w-px h-4 bg-gray-150" />
+                  <a
+                    href={telLink(telefone)}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium hover:text-primary-blue transition-colors"
+                  >
+                    <Headset size={15} className="text-primary-blue" />
+                    Atendimento <strong className="text-gray-700">{telefone}</strong>
+                  </a>
+                </>
+              )}
             </div>
           </nav>
         </div>
