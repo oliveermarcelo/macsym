@@ -6,7 +6,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Ticket,
-  Plug, Settings, LogOut, Menu, Store, ShoppingBag, Truck, UserCog, FolderTree,
+  Plug, Settings, LogOut, Menu, Store, ShoppingBag, Truck, UserCog,
   Image as ImageIcon,
 } from 'lucide-react';
 import { AdminProvider } from './AdminContext';
@@ -23,12 +23,11 @@ import SettingsAdmin from './modules/SettingsAdmin';
 import AbandonedCartsAdmin from './modules/AbandonedCartsAdmin';
 import ShippingAdmin from './modules/ShippingAdmin';
 import UsersAdmin from './modules/UsersAdmin';
-import CategoriesAdmin from './modules/CategoriesAdmin';
 import VitrineCategoriasAdmin from './modules/VitrineCategoriasAdmin';
 
 type ModuleId =
   | 'dashboard' | 'products' | 'orders' | 'abandoned' | 'customers'
-  | 'coupons' | 'shipping' | 'integrations' | 'categories' | 'vitrine' | 'users' | 'settings';
+  | 'coupons' | 'shipping' | 'integrations' | 'vitrine' | 'users' | 'settings';
 
 const NAV: { id: ModuleId; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -39,7 +38,6 @@ const NAV: { id: ModuleId; label: string; icon: React.ComponentType<{ size?: num
   { id: 'coupons', label: 'Cupons & Promoções', icon: Ticket },
   { id: 'shipping', label: 'Frete & Entrega', icon: Truck },
   { id: 'integrations', label: 'Integrações', icon: Plug },
-  { id: 'categories', label: 'Categorias do ERP', icon: FolderTree },
   { id: 'vitrine', label: 'Vitrine das Categorias', icon: ImageIcon },
   { id: 'users', label: 'Usuários do Painel', icon: UserCog },
   { id: 'settings', label: 'Configurações', icon: Settings },
@@ -85,7 +83,6 @@ export default function AdminApp() {
       case 'coupons': return <CouponsAdmin />;
       case 'shipping': return <ShippingAdmin />;
       case 'integrations': return <IntegrationsAdmin />;
-      case 'categories': return <CategoriesAdmin />;
       case 'vitrine': return <VitrineCategoriasAdmin />;
       case 'users': return <UsersAdmin />;
       case 'settings': return <SettingsAdmin />;

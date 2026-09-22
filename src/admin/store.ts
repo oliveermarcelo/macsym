@@ -15,7 +15,7 @@ import { Product } from '../types';
 import {
   AdminState, OrderStatus, Coupon, StoreSettings, IntegrationConfig,
   IntegrationId, AbandonedStatus, RecoveryConfig, ShippingConfig, TrackingEvent, Webhook,
-  PanelUser, ErpCategory,
+  PanelUser,
 } from './types';
 
 /** Estado completo do painel numa requisição só. */
@@ -55,9 +55,9 @@ export function uploadImagem(dataUrl: string): Promise<{ url: string; bytes: num
 /**
  * Muda o status. Ao cancelar, `cancelReason` diz POR QUÊ.
  *
- * O motivo não é enfeite: no ERP, "cliente desistiu" e "pagamento recusado"
- * viram lançamentos diferentes, e a partir de `status = "canceled"` sozinho não
- * há como saber qual dos dois aconteceu.
+ * O motivo não é enfeite: na contabilidade, "cliente desistiu" e "pagamento
+ * recusado" viram lançamentos diferentes, e a partir de `status = "canceled"`
+ * sozinho não há como saber qual dos dois aconteceu.
  */
 export function setOrderStatus(
   id: string,
@@ -192,42 +192,13 @@ export function updatePanelUser(
   return api.patch<{ users: PanelUser[] }>(`/admin/users/${encodeURIComponent(id)}`, patch);
 }
 
-// ---------------------------------------------- categorias do ERP -----
-
-/**
- * Amarra um código do ERP a uma categoria da loja. `category: null` desamarra.
- *
- * Devolve a lista inteira já atualizada, pelo mesmo motivo das rotas de
- * usuário: nesta tela uma amarração muda a contagem de pendentes e pode tirar
- * produtos do limbo, e o número na tela precisa acompanhar sem uma segunda
- * viagem ao servidor.
- */
-export function linkErpCategory(
-  code: string,
-  category: string | null,
-  subcategory: string | null,
-): Promise<{ erpCategories: ErpCategory[]; productsWithoutCategory: number; released: number }> {
-  return api.put(`/admin/erp-categories/${encodeURIComponent(code)}`, { category, subcategory });
-}
-
-/**
- * Refaz a árvore de categorias da loja como cópia da do ERP.
- *
- * Destrutivo: apaga as categorias atuais. Pede `confirmar` explícito porque um
- * clique a mais não pode ser o que esvazia a vitrine.
- */
-export function espelharCategoriasDoErp(): Promise<{
-  categorias: number; subcategorias: number; amarrados: number;
-  orfaos: number; apagadas: number; warnings: string[];
-}> {
-  return api.post('/admin/erp-categories/espelhar', { confirmar: true });
-}
+// -------------------------------------------------------- categorias -----
 
 /**
  * Foto, frase e destaque na home de uma categoria.
  *
- * Só o que é da LOJA: nome e hierarquia continuam vindo do ERP, para o nome não
- * deixar de bater com o do outro lado na hora de amarrar.
+ * Só o que é da VITRINE. O nome vem da carga do catálogo e não se edita aqui:
+ * é por ele que a pessoa reconhece a categoria nas outras telas do painel.
  */
 export function updateCategoryShowcase(
   id: string,
@@ -243,15 +214,15 @@ export function updateCategoryShowcase(
 /**
  * Cria uma categoria geral, à mão.
  *
- * O ERP manda "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D" soltas,
- * no mesmo nível — não existe uma "Pirâmides" para o cliente clicar, e não vai
- * existir enquanto o ERP não mandar a hierarquia. Esta é a da loja.
+ * O catálogo traz "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D"
+ * soltas, no mesmo nível — não existe uma "Pirâmides" para o cliente clicar.
+ * Esta é a forma de a loja criar a sua e pendurar as outras dentro.
  */
 export function createCategory(name: string): Promise<{ id: string; name: string }> {
   return api.post<{ id: string; name: string }>('/admin/categories', { name });
 }
 
-/** Apaga uma categoria geral criada aqui. O servidor recusa as vindas do ERP. */
+/** Apaga uma categoria geral criada aqui. O servidor recusa as do catálogo. */
 export function deleteCategory(id: string): Promise<void> {
   return api.del(`/admin/categories/${encodeURIComponent(id)}`);
 }

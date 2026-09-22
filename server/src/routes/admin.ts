@@ -16,10 +16,6 @@ import { encryptPayload } from '../crypto.ts';
 import { placeholders, q, type Row } from '../db.ts';
 import { fail } from '../errors.ts';
 import {
-  amarrarCategoria, erpCategoriaParaApi, espelharArvoreDoErp, produtosSemCategoria,
-} from '../erp-categorias.ts';
-import { destravarCampos, travarCamposEditados } from '../erp-produtos.ts';
-import {
   body, bodyBool, bodyFloat, bodyInt, bodyStr, brl, digits, iso, jsonOk, queryStr,
 } from '../http.ts';
 import { guardarImagem } from '../midia.ts';
@@ -211,65 +207,7 @@ adminRoutes.get('/state', h(async (req, res) => {
       active: Boolean(w.active),
     })),
     users: await listaDeUsuarios(eu.id),
-    // Categorias que o ERP mandou, com o estado da amarração.
-    erpCategories: (await q.all('SELECT * FROM erp_categories ORDER BY name ASC'))
-      .map(erpCategoriaParaApi),
-    productsWithoutCategory: await produtosSemCategoria(),
   });
-}));
-
-/**
- * PUT /api/admin/erp-categories/:code — amarra um código do ERP.
- *
- * É aqui que a decisão "amarração manual" acontece de verdade. `category:
- * null` desamarra: o código volta a ser pendente, e produto que chegar com ele
- * volta a ficar fora da vitrine.
- */
-adminRoutes.put('/erp-categories/:code', h(async (req, res) => {
-  await requireAdmin(req);
-  const b = body(req);
-  const categoria = b.category === null || b.category === undefined
-    ? null
-    : bodyStr(b, 'category', '', 100);
-  const sub = b.subcategory === null || b.subcategory === undefined
-    ? null
-    : bodyStr(b, 'subcategory', '', 100);
-
-  const { erro, liberados } = await amarrarCategoria(String(req.params.code ?? ''), categoria, sub);
-  if (erro !== '') fail(erro, 422, 'invalid_link');
-
-  jsonOk(res, {
-    ok: true,
-    // Quantos produtos entraram na vitrine por causa deste clique. A tela
-    // mostra o número: é o resultado concreto de uma ação que, sem ele,
-    // pareceria não ter feito nada.
-    released: liberados,
-    erpCategories: (await q.all('SELECT * FROM erp_categories ORDER BY name ASC'))
-      .map(erpCategoriaParaApi),
-    productsWithoutCategory: await produtosSemCategoria(),
-  });
-}));
-
-/**
- * POST /api/admin/erp-categories/espelhar — a loja vira cópia do ERP.
- *
- * Apaga a árvore de categorias da loja e a refaz a partir das categorias do
- * ERP, amarrando cada código à categoria que nasceu dele. É destrutivo, e o
- * pedido de confirmação na tela existe por isso: produtos que estavam nas
- * categorias antigas saem da vitrine até o ERP reenviá-los.
- *
- * Exige `confirmar: true` no corpo. Não é burocracia: é uma rota que esvazia a
- * vitrine, e um POST disparado por engano — um clique duplo, um script de
- * teste apontado para produção — não pode ser suficiente para isso acontecer.
- */
-adminRoutes.post('/erp-categories/espelhar', h(async (req, res) => {
-  await requireAdmin(req);
-  if (bodyBool(body(req), 'confirmar', false) !== true) {
-    fail('Confirme a substituição para continuar.', 422, 'confirmation_required');
-  }
-
-  const r = await espelharArvoreDoErp();
-  jsonOk(res, { ok: true, ...r });
 }));
 
 // POST /api/admin/products — cria ou atualiza
@@ -310,7 +248,8 @@ adminRoutes.post('/products', h(async (req, res) => {
       bodyStr(b, 'longDescription', '', 20000),
       price,
       bodyFloat(b, 'oldPrice', 0) > 0 ? bodyFloat(b, 'oldPrice') : null,
-      // Saldo pode ter fração (o ERP trabalha assim); 3 casas, como a coluna.
+      // Saldo pode ter fração (a loja vende por peso e por metro); 3 casas,
+      // como a coluna.
       Math.max(0, Math.round(bodyFloat(b, 'stock') * 1000) / 1000),
       image,
       bodyStr(b, 'tag', '', 40) || null,
@@ -327,27 +266,12 @@ adminRoutes.post('/products', h(async (req, res) => {
   );
 
   /*
-   * O QUE FOI EDITADO AQUI PASSA A RESISTIR AO ERP.
-   *
-   * O cliente pediu duas coisas que se contradizem sem um mecanismo: o ERP é a
-   * fonte da verdade de preço e estoque, E o painel precisa poder alterar. A
-   * saída é a trava por campo — o que a lojista muda aqui entra em
-   * `locked_fields` e o próximo ciclo do ERP ignora aquele campo (ver
-   * erp-produtos.ts). Sem isto, a correção feita à mão volta sozinha e a
-   * conclusão de quem cuida da loja é "o site está com defeito".
-   *
-   * A comparação é por VALOR, não por presença: o painel envia o produto
-   * inteiro a cada salvamento, então tratar tudo como edição travaria o
-   * cadastro completo no primeiro clique — e o ERP nunca mais atualizaria nada.
-   */
-  const travados = await travarCamposEditados(id, b, atual);
-
-  /*
    * Fotos extras: a lista enviada substitui a que estava lá.
    *
-   * Só mexe quando o campo VEM no corpo. O ERP grava produto pela API v1 e não
-   * conhece galeria — se a ausência do campo fosse tratada como lista vazia,
-   * o primeiro ciclo do ERP apagaria as fotos que alguém subiu à mão aqui.
+   * Só mexe quando o campo VEM no corpo. Quem grava produto por fora — a
+   * importação do catálogo, uma automação pela API — não conhece galeria; se a
+   * ausência do campo fosse tratada como lista vazia, a primeira gravação
+   * dessas apagaria as fotos que alguém subiu à mão aqui.
    */
   if (Array.isArray(b.images)) {
     const urls = (b.images as unknown[])
@@ -366,26 +290,7 @@ adminRoutes.post('/products', h(async (req, res) => {
 
   const row = await q.one('SELECT * FROM products WHERE id = ?', [id]);
   const galeria = (await galeriasDe([id])).get(id);
-  jsonOk(res, { product: productRowToApi(row!, undefined, galeria), lockedFields: travados });
-}));
-
-/**
- * DELETE /api/admin/products/:id/locks — o produto volta a seguir o ERP.
- *
- * Sem uma forma de soltar, a trava vira armadilha: um preço ajustado numa
- * promoção de um dia congelaria para sempre, e ninguém lembraria o motivo meses
- * depois. `?fields=price,stock` solta só os informados; sem parâmetro, solta
- * todos.
- */
-adminRoutes.delete('/products/:id/locks', h(async (req, res) => {
-  await requireAdmin(req);
-  const pedidos = queryStr(req, 'fields', '', 255)
-    .split(',').map((x) => x.trim()).filter((x) => x !== '');
-  const restantes = await destravarCampos(
-    String(req.params.id ?? ''),
-    pedidos.length > 0 ? pedidos : null,
-  );
-  jsonOk(res, { ok: true, lockedFields: restantes });
+  jsonOk(res, { product: productRowToApi(row!, galeria) });
 }));
 
 /**
@@ -416,7 +321,7 @@ adminRoutes.post('/midia', h(async (req, res) => {
  *
  * Com `?definitivo=1` a linha é apagada — mas só se nenhum pedido que ainda
  * vale contiver o produto. É o caso real de quem criou um item errado, ou dos
- * produtos de teste que um ERP em integração deixa para trás: não há histórico
+ * produtos de teste que uma importação deixa para trás: não há histórico
  * a preservar, e esconder em vez de apagar só acumula lixo que reaparece em
  * toda listagem do painel.
  *
@@ -463,14 +368,13 @@ adminRoutes.delete('/products/:id', h(async (req, res) => {
 /**
  * POST /api/admin/categories — cria uma CATEGORIA GERAL, à mão.
  *
- * Existe porque o ERP manda "Pirâmides de Cristal", "de Madeira", "de Impressão
- * 3D" como categorias soltas, todas no mesmo nível: não há uma "Pirâmides" para
- * o cliente clicar, e nunca vai haver enquanto o ERP não mandar a hierarquia.
- * A loja cria a sua.
+ * Existe porque o catálogo importado traz "Pirâmides de Cristal", "de Madeira",
+ * "de Impressão 3D" como categorias soltas, todas no mesmo nível: não há uma
+ * "Pirâmides" para o cliente clicar. A loja cria a sua e pendura as outras
+ * dentro, sem mover produto nenhum.
  *
- * Nasce com `manual = 1`, e é isso que a salva: o espelhamento apaga e recria
- * as categorias a partir do que o ERP mandou, e apagaria junto uma categoria
- * que o ERP não conhece.
+ * Nasce com `manual = 1`, e é isso que a distingue das que vieram na carga do
+ * catálogo: só as criadas aqui podem ser apagadas pela tela.
  */
 adminRoutes.post('/categories', h(async (req, res) => {
   await requireAdmin(req);
@@ -502,8 +406,8 @@ adminRoutes.post('/categories', h(async (req, res) => {
 /**
  * DELETE /api/admin/categories/:id — apaga uma categoria criada à mão.
  *
- * Só as manuais. Categoria vinda do ERP não se apaga aqui: ela voltaria na
- * próxima sincronização, e o botão teria prometido algo que não se cumpre.
+ * Só as manuais. Categoria vinda da carga do catálogo não se apaga aqui: ela
+ * voltaria na próxima carga, e o botão teria prometido algo que não se cumpre.
  *
  * Quem estava dentro dela volta ao primeiro nível, e nenhum produto se move —
  * agrupar nunca mexeu em produto, e desagrupar também não.
@@ -516,10 +420,10 @@ adminRoutes.delete('/categories/:id', h(async (req, res) => {
   if (linha === null) fail('Categoria não encontrada.', 404, 'not_found');
   if (!Number(linha.manual)) {
     fail(
-      'Esta categoria veio do ERP e voltaria na próxima sincronização. '
+      'Esta categoria veio da carga do catálogo e voltaria na próxima. '
       + 'Só dá para apagar as categorias gerais criadas aqui.',
       409,
-      'category_from_erp',
+      'category_from_catalog',
     );
   }
 
@@ -543,9 +447,10 @@ adminRoutes.delete('/categories/:id', h(async (req, res) => {
 /**
  * PATCH /api/admin/categories/:id — a vitrine de uma categoria.
  *
- * Só mexe no que é DA LOJA: foto, frase e se aparece na home. Nome e hierarquia
- * continuam vindo do ERP de propósito — renomear aqui faria o nome deixar de
- * bater com o do outro lado, e a tela de amarração ficaria impossível de ler.
+ * Só mexe no que é DA VITRINE: foto, frase e se aparece na home. O nome vem da
+ * carga do catálogo e não se edita aqui de propósito — é por ele que a pessoa
+ * reconhece a categoria nas duas telas, e renomear em um lugar só faria as
+ * duas discordarem.
  *
  * Campo ausente não é mexido. Isso permite à tela salvar só o que mudou, e
  * impede que uma tela antiga, que não conhece um campo novo, o apague ao gravar.
@@ -581,7 +486,7 @@ adminRoutes.patch('/categories/:id', h(async (req, res) => {
    * Três recusas, e as três evitam um menu que não fecha ou uma categoria que
    * some: não dá para pendurar numa categoria que não existe, nem em si mesma,
    * nem dentro de uma categoria que já está dentro de outra — só há um nível
-   * de agrupamento, e é o que basta para o problema real (o ERP mandando
+   * de agrupamento, e é o que basta para o problema real (o catálogo com
    * "Pirâmides de X" tudo solto no mesmo nível).
    */
   if (b.groupId !== undefined) {
@@ -626,8 +531,8 @@ adminRoutes.patch('/categories/:id', h(async (req, res) => {
   if (mudou === 0) fail('Categoria não encontrada.', 404, 'not_found');
 
   /*
-   * Devolve a lista inteira já atualizada, como as telas de usuário e de
-   * categorias do ERP: aqui um clique muda o que os outros mostram — marcar
+   * Devolve a lista inteira já atualizada, como a tela de usuários: aqui um
+   * clique muda o que os outros mostram — marcar
    * uma categoria para a home muda a contagem exibida na tela —, e uma segunda
    * viagem ao servidor entre um clique e o próximo deixaria a tela mentindo no
    * intervalo.
@@ -654,8 +559,8 @@ adminRoutes.patch('/orders/:id', h(async (req, res) => {
   /*
    * Quem cancelou é "store": foi alguém clicando no painel.
    *
-   * O motivo é perguntado na tela. No ERP, "cliente desistiu" e "pagamento
-   * recusado" viram lançamentos diferentes, e a partir de `status =
+   * O motivo é perguntado na tela. Na contabilidade, "cliente desistiu" e
+   * "pagamento recusado" viram lançamentos diferentes, e a partir de `status =
    * "canceled"` sozinho não há como saber qual dos dois aconteceu.
    */
   const t = transicaoDeStatus(status, bodyStr(body(req), 'cancelReason', '', 200), 'store');

@@ -25,7 +25,7 @@ const fmtDataHora = (iso: string | null | undefined) =>
 /**
  * Endpoints que o teste percorre.
  *
- * São os três de leitura que o ERP consome. Só GET: um teste de conexão que
+ * São os três de leitura que as automações consomem. Só GET: um teste de conexão que
  * escreve no catálogo ou muda um pedido é uma armadilha esperando o dia em que
  * alguém clicar "testar" na loja em produção.
  */
@@ -47,7 +47,7 @@ interface ResultadoDoTeste {
 const ENDPOINTS = [
   { method: 'GET', path: '/products', desc: 'Lista produtos do catálogo' },
   { method: 'GET', path: '/products/:id', desc: 'Detalhe de um produto' },
-  { method: 'PATCH', path: '/products/:id/stock', desc: 'Atualiza o estoque (ERP)' },
+  { method: 'PATCH', path: '/products/:id/stock', desc: 'Atualiza o estoque' },
   { method: 'GET', path: '/orders', desc: 'Lista pedidos (?status= &since=)' },
   { method: 'GET', path: '/orders/:id', desc: 'Detalhe de um pedido' },
   { method: 'PATCH', path: '/orders/:id', desc: 'Atualiza status do pedido' },
@@ -86,8 +86,8 @@ function Copyable({ value, className = '' }: { value: string; className?: string
  * Testa uma chave de API fazendo a chamada de verdade.
  *
  * A chamada sai DO NAVEGADOR, e não do servidor, de propósito: assim ela
- * percorre o mesmo caminho público que o UNO percorre — domínio, proxy da
- * Hostinger, HTTPS. Um teste feito pelo servidor contra si mesmo pularia
+ * percorre o mesmo caminho público que a automação percorre — domínio, proxy
+ * da Hostinger, HTTPS. Um teste feito pelo servidor contra si mesmo pularia
  * justamente a parte que costuma quebrar, e daria verde com o caminho externo
  * bloqueado.
  *
@@ -108,7 +108,7 @@ function TesteDaChave({ nome, prefixo }: { nome: string; prefixo: string }) {
     setResultados(null);
 
     if (chave === '') {
-      setAviso('Cole a chave que você cadastrou no UNO.');
+      setAviso('Cole a chave que você cadastrou na automação.');
       return;
     }
 
@@ -172,7 +172,7 @@ function TesteDaChave({ nome, prefixo }: { nome: string; prefixo: string }) {
           autoFocus
           value={token}
           onChange={(e) => setToken(e.target.value)}
-          placeholder="Cole aqui a chave que está cadastrada no UNO"
+          placeholder="Cole aqui a chave que está cadastrada na automação"
           className={`${inputCls} font-mono`}
           onKeyDown={(e) => e.key === 'Enter' && !rodando && testar()}
         />
@@ -184,7 +184,7 @@ function TesteDaChave({ nome, prefixo }: { nome: string; prefixo: string }) {
       <p className="text-[11px] text-gray-400 leading-relaxed">
         A chave precisa ser colada porque o servidor guarda só o hash dela — é isso que impede que um
         banco vazado entregue chaves utilizáveis. O que você digita aqui não é salvo, e a chamada sai
-        deste navegador pelo mesmo endereço público que o UNO usa.
+        deste navegador pelo mesmo endereço público que a automação usa.
       </p>
 
       {aviso !== '' && (
@@ -214,19 +214,19 @@ function TesteDaChave({ nome, prefixo }: { nome: string; prefixo: string }) {
 
           <p className={`text-xs font-bold pt-1 ${todosOk ? 'text-emerald-700' : 'text-red-700'}`}>
             {todosOk
-              ? 'A chave funciona nos três endpoints. Se o ERP ainda não recebe dados, o problema '
-                + 'está do lado dele, não na conexão.'
+              ? 'A chave funciona nos três endpoints. Se o outro sistema ainda não recebe dados, '
+                + 'o problema está do lado dele, não na conexão.'
               : algum401
-                ? 'A chave foi recusada (401). Ela pode ter sido revogada, ou o ERP está enviando '
-                  + 'outra. Gere uma nova e cadastre no ERP.'
+                ? 'A chave foi recusada (401). Ela pode ter sido revogada, ou o outro sistema está '
+                  + 'enviando outra. Gere uma nova e cadastre lá.'
                 : 'Algum endpoint não respondeu 200. O detalhe de cada linha diz o que voltou.'}
           </p>
 
           {todosOk && (
             <p className="text-[11px] text-gray-400 leading-relaxed">
               O selo da chave continua como estava de propósito: teste feito pelo painel não conta
-              como uso. Assim <b>&quot;nunca usada&quot; continua respondendo só sobre o ERP</b> — que
-              é a pergunta que importa quando o outro lado diz que já integrou.
+              como uso. Assim <b>&quot;nunca usada&quot; continua respondendo só sobre quem
+              integra</b> — que é a pergunta que importa quando o outro lado diz que já integrou.
             </p>
           )}
         </div>
@@ -340,7 +340,7 @@ export default function ApiSection() {
                       {k.revoked && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Revogada</span>}
                       {/*
                         "Nunca usada" é o diagnóstico mais útil desta tela: se o
-                        ERP jura que integrou e a chave nunca foi usada, nenhuma
+                        outro lado jura que integrou e a chave nunca foi usada, nenhuma
                         requisição chegou — o problema está antes da loja
                         (endereço errado, chave errada, firewall), e não aqui.
                       */}

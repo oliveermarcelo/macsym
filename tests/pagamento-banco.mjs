@@ -185,7 +185,7 @@ checar('aviso de pedido inexistente não quebra nada', false, r.mudou);
 /*
  * ------------------------------------------------- saldo fracionado ----
  *
- * `stock` virou DECIMAL porque o ERP trabalha o saldo com fração. A baixa e a
+ * `stock` virou DECIMAL porque a loja vende por peso e por metro. A baixa e a
  * devolução são UPDATEs aritméticos com trava no WHERE
  * (`stock = stock - ? WHERE stock >= ?`), e é aí que uma coluna inteira
  * estragaria a conta sem reclamar: 2,5 menos 1 daria 1 em vez de 1,5, e a

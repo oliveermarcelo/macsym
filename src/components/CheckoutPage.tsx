@@ -151,7 +151,7 @@ export default function CheckoutPage({
   const [complement, setComplement] = useState(addr?.complement ?? '');
   const [neighborhood, setNeighborhood] = useState(addr?.neighborhood ?? '');
   const [city, setCity] = useState(addr?.city ?? '');
-  /** Observação do comprador sobre a entrega. Segue para o ERP com o pedido. */
+  /** Observação do comprador sobre a entrega. Fica gravada no pedido. */
   const [note, setNote] = useState('');
   const [stateCode, setStateCode] = useState(addr?.state ?? 'SP');
 
@@ -295,7 +295,7 @@ export default function CheckoutPage({
    *
    * A lista vinha com "SP" marcado; quem digitava um CEP da Bahia e não
    * trocava o estado mandava o pedido com destino errado. A nota fiscal saía
-   * com UF e ICMS errados, e o ERP não tinha como desconfiar — ele confia no
+   * com UF e ICMS errados, e quem emite não tinha como desconfiar — confia no
    * que a loja manda.
    *
    * A UF sai da própria cotação, que já resolve o estado pelo CEP para
@@ -855,8 +855,8 @@ export default function CheckoutPage({
                         </div>
                         {/*
                           Observação do comprador.
-                          Vai para o ERP junto com o pedido — "entregar após as
-                          18h", "é presente, sem nota junto". Sem este campo, o
+                          Fica gravada no pedido — "entregar após as 18h", "é
+                          presente, sem nota junto". Sem este campo, o
                           cliente escrevia isso no WhatsApp depois, quando a
                           etiqueta já estava impressa.
                         */}

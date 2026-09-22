@@ -37,7 +37,7 @@ const STATUSES: { id: OrderStatus | 'all'; label: string }[] = [
   { id: 'canceled', label: 'Cancelados' },
 ];
 
-const CHANNEL_LABEL: Record<string, string> = { site: 'Site', whatsapp: 'WhatsApp', erp: 'ERP' };
+const CHANNEL_LABEL: Record<string, string> = { site: 'Site', whatsapp: 'WhatsApp' };
 
 // Status-colored select (acts as the badge itself, no duplicate label)
 const STATUS_SELECT: Record<OrderStatus, string> = {
@@ -164,8 +164,9 @@ function TrackingRow({
 /**
  * Motivos prontos para o cancelamento.
  *
- * São opções, e não um campo livre sozinho, porque o ERP precisa distinguir os
- * casos — e porque texto livre em campo de motivo vira "cancelado" escrito de
+ * São opções, e não um campo livre sozinho, porque a contabilidade precisa
+ * distinguir os casos — e porque texto livre em campo de motivo vira
+ * "cancelado" escrito de
  * quinze jeitos diferentes, o que não se agrupa em relatório nenhum. O campo
  * livre continua ali para o que não couber nesta lista.
  */
@@ -200,8 +201,8 @@ function DialogoDeCancelamento({ pedido, onFechar, onConfirmar }: {
         <h3 id="cancel-title" className="font-extrabold text-gray-900">Cancelar pedido</h3>
         <p className="text-sm text-gray-500 mt-2 leading-relaxed">
           O pedido {pedido.id}, de {pedido.customerName}, será marcado como cancelado.
-          {' '}O motivo vai junto para o ERP — lá, “o cliente desistiu” e “o pagamento foi
-          recusado” viram lançamentos diferentes.
+          {' '}O motivo fica gravado no pedido — “o cliente desistiu” e “o pagamento foi
+          recusado” viram lançamentos diferentes na contabilidade.
         </p>
 
         <div className="mt-4 space-y-2">
@@ -234,7 +235,7 @@ function DialogoDeCancelamento({ pedido, onFechar, onConfirmar }: {
           <Btn variant="ghost" onClick={onFechar}>Voltar</Btn>
           {/*
             Sem motivo escrito, o botão fica travado: um cancelamento sem causa
-            registrada é exatamente o que o ERP não consegue interpretar.
+            registrada é exatamente o que ninguém consegue interpretar depois.
           */}
           <Btn variant="danger" onClick={() => onConfirmar(motivo)} disabled={motivo === ''}>
             Cancelar pedido
@@ -305,7 +306,7 @@ export default function OrdersAdmin() {
                     <p className="text-gray-700">{o.customerName}</p>
                     <p className="text-[11px] text-gray-400">{o.items.length} item(ns)</p>
                   </td>
-                  <td className="py-2.5 px-4 text-gray-500 text-xs">{CHANNEL_LABEL[o.channel]}</td>
+                  <td className="py-2.5 px-4 text-gray-500 text-xs">{CHANNEL_LABEL[o.channel] ?? o.channel}</td>
                   <td className="py-2.5 px-4 text-gray-500 text-xs">{fmtDate(o.createdAt)}</td>
                   <td className="py-2.5 px-4 text-right font-semibold">{brl(o.total)}</td>
                   <td className="py-2.5 px-4">
@@ -315,7 +316,7 @@ export default function OrdersAdmin() {
                         Cancelar abre o diálogo do motivo em vez de aplicar
                         direto. Qualquer outro status segue como antes — só o
                         cancelamento precisa de explicação, porque é o único
-                        que o ERP não consegue interpretar sozinho.
+                        que o status sozinho não consegue explicar.
                       */
                       onChange={(e) => {
                         const novo = e.target.value as OrderStatus;

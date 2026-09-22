@@ -202,8 +202,8 @@ const INDICES: { tabela: string; nome: string; definicao: string }[] = [
     tabela: 'orders',
     nome: 'idx_order_updated',
     /*
-     * É por ele que o ERP varre o que MUDOU (`?updatedSince=`), a cada poucos
-     * minutos, para sempre. Sem o índice, cada varredura lê a tabela inteira —
+     * É por ele que a varredura da API v1 acha o que MUDOU
+     * (`?updatedSince=`), a cada poucos minutos, para sempre. Sem o índice, cada varredura lê a tabela inteira —
      * barato com cem pedidos, caro com cinquenta mil, e a conta chega quando a
      * loja estiver vendendo bem.
      */
@@ -271,7 +271,7 @@ const ALARGAMENTOS: { tabela: string; coluna: string; de: RegExp; para: string }
      *
      * O estoque já aceita fração desde que a loja passou a vender por peso e
      * por metro. A quantidade do PEDIDO ficou para trás: uma venda de 1,5 kg
-     * era truncada para 1 kg na hora de gravar, e o ERP faturava a menos sem
+     * era truncada para 1 kg na hora de gravar, e a loja faturava a menos sem
      * nada acusar — a nota sairia com um número que ninguém pediu.
      */
     tabela: 'order_items',
@@ -308,9 +308,9 @@ export async function widenColumns(say: Log): Promise<number> {
     } catch (e) {
       /*
        * Falhar aqui não pode impedir a loja de subir. Um saldo lido como
-       * inteiro é menos ruim do que uma loja fora do ar — o efeito é o ERP
-       * mandar 7,5 e a loja guardar 7, que é exatamente o problema que esta
-       * conversão resolve, mas ele já era o comportamento de ontem.
+       * inteiro é menos ruim do que uma loja fora do ar — o efeito é receber
+       * 7,5 e guardar 7, que é exatamente o problema que esta conversão
+       * resolve, mas ele já era o comportamento de ontem.
        */
       const err = e as { code?: string; message?: string };
       say(`  ! não consegui converter ${tabela}.${coluna}: ${err.code ?? ''} ${err.message ?? ''}`.trimEnd());

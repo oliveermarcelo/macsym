@@ -33,7 +33,7 @@ export interface Order {
   couponCode: string | null;
   status: OrderStatus;
   payment: 'card' | 'pix' | 'boleto';
-  channel: 'site' | 'whatsapp' | 'erp';
+  channel: 'site' | 'whatsapp';
   /** Código dos Correios (AA123456789BR). Vazio enquanto não despachado. */
   trackingCode?: string;
   /** Último status consultado, para não bater na API a cada abertura da tela. */
@@ -48,7 +48,7 @@ export interface Order {
   paidAt?: string | null;
   /** Cobrança gerada e ainda pagável — apagar o pedido perderia esse dinheiro. */
   hasOpenCharge?: boolean;
-  /** Por que foi cancelado, e por quem (loja, cliente, gateway ou ERP). */
+  /** Por que foi cancelado, e por quem (loja, cliente, gateway ou API). */
   cancelReason?: string | null;
   canceledBy?: string | null;
 }
@@ -143,7 +143,7 @@ export interface ShippingConfig {
   /**
    * Quem entrega quando o frete sai da tabela acima, e não de uma cotação.
    *
-   * Vai no pedido como `shippingCarrier`, que é por onde o ERP acha a
+   * Vai no pedido como `shippingCarrier`, que é por onde quem despacha acha a
    * transportadora no cadastro dele. Vazio é legítimo: com Correios ou Melhor
    * Envio ligados, a transportadora vem da cotação e este campo é ignorado.
    */
@@ -152,8 +152,6 @@ export interface ShippingConfig {
 
 // ---- Integrations ----
 export type IntegrationId =
-  | 'uno'
-  | 'erp'
   | 'zapi'
   | 'evolution'
   | 'chatwoot'
@@ -219,22 +217,6 @@ export interface PanelUser {
   isYou: boolean;
 }
 
-/**
- * Uma categoria como o ERP a enviou, com o estado da amarração.
- *
- * `category` nulo significa pendente: o ERP mandou, ninguém decidiu onde ela
- * entra na loja, e produto que chegar com este código fica fora da vitrine.
- */
-export interface ErpCategory {
-  code: string;
-  name: string;
-  parentCode: string | null;
-  active: boolean;
-  category: string | null;
-  subcategory: string | null;
-  linked: boolean;
-}
-
 export interface AdminState {
   /** Taxonomia de categorias, para os seletores do painel. */
   menu: MenuCategory[];
@@ -250,7 +232,6 @@ export interface AdminState {
   webhooks: Webhook[];
   shipping: ShippingConfig;
   users: PanelUser[];
-  erpCategories: ErpCategory[];
   /**
    * TODAS as categorias, sem agrupar — inclusive as que já estão dentro de uma
    * categoria geral, que por definição não aparecem no `menu` do topo.
@@ -279,6 +260,4 @@ export interface AdminState {
    * liberava nada e o produto ficava na lista para sempre.
    */
   productsWithActiveOrders: string[];
-  /** Produtos sem categoria — invisíveis na vitrine até a amarração. */
-  productsWithoutCategory: number;
 }

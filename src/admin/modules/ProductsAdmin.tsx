@@ -276,9 +276,9 @@ function ProductEditor({ initial, menu, onCancel, onSave }: {
             Todas as categorias aparecem.
             O filtro anterior mostrava só as que TÊM subcategoria — era um jeito
             de esconder "Destaques" e "Novidades", que são vitrines e não
-            categorias de catálogo. O efeito colateral apareceu quando a árvore
-            passou a vir do ERP: a maioria das categorias de lá não tem filhas,
-            e sumiram todas do seletor. Agora o filtro é pelo que essas duas
+            categorias de catálogo. O efeito colateral apareceu com o catálogo
+            de verdade: a maioria das categorias não tem filhas, e sumiram todas
+            do seletor. Agora o filtro é pelo que essas duas
             realmente são — entradas de vitrine, marcadas com `featured`.
           */}
           <div className="grid grid-cols-2 gap-4">
@@ -324,7 +324,7 @@ function ProductEditor({ initial, menu, onCancel, onSave }: {
           {/*
             Produto sem categoria não aparece na vitrine. Sem este aviso, salvar
             um cadastro novo sem escolher categoria produz um produto invisível
-            e silencioso — o mesmo tipo de falha que o ERP já provocava.
+            e silencioso: some da vitrine sem nenhum erro aparecer.
           */}
           {(p.category ?? '') === '' && (
             <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 -mt-2">
@@ -353,8 +353,9 @@ function ProductEditor({ initial, menu, onCancel, onSave }: {
                 onChange={(e) => set({ oldPrice: e.target.value ? parseFloat(e.target.value) : undefined })} className={inputCls} />
             </Field>
             {/*
-              Estoque aceita fração porque o ERP manda o saldo assim. Arredondar
-              aqui faria a loja e o ERP discordarem em silêncio.
+              Estoque aceita fração porque a loja vende por peso e por metro.
+              Arredondar aqui faria o painel e a prateleira discordarem em
+              silêncio.
             */}
             <Field label="Estoque">
               <input type="number" step="0.001" min="0" value={p.stock ?? 0}
@@ -398,8 +399,8 @@ function ProductEditor({ initial, menu, onCancel, onSave }: {
 
           {/*
             A página do produto já mostrava este texto quando ele existia — só
-            que não havia como escrevê-lo pelo painel, então ele só entrava pelo
-            ERP.
+            que não havia como escrevê-lo pelo painel, então ele só entrava pela
+            carga do catálogo.
           */}
           <Field label="Descrição completa (aparece na página do produto)">
             <textarea value={p.longDescription ?? ''} rows={5} className={inputCls}

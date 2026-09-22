@@ -7,11 +7,12 @@
  * Esta tela nasceu de um defeito que ninguém tinha visto: a seção "Explore por
  * categoria" da home eram SEIS CARTÕES CRAVADOS no código — id, nome, frase e
  * foto fixos. Enquanto a loja tinha exatamente aquelas seis categorias,
- * funcionava. Quando ela passou a espelhar a árvore do ERP, os ids deixaram de
- * existir: os cartões continuavam bonitos e levavam a uma lista vazia.
+ * funcionava. Quando o catálogo real entrou, esses ids deixaram de existir: os
+ * cartões continuavam bonitos e levavam a uma lista vazia.
  *
- * Nome e hierarquia continuam vindo do ERP. O que se edita aqui é só o que a
- * loja tem a dizer sobre a própria vitrine.
+ * O nome da categoria vem da carga do catálogo. O que se edita aqui é só o que
+ * a loja tem a dizer sobre a própria vitrine: foto, frase, destaque na home e
+ * em qual categoria geral cada uma fica.
  */
 
 import React, { useMemo, useState } from 'react';
@@ -147,9 +148,9 @@ function LinhaDaCategoria({ categoria, grupos, membros, onApagar }: {
               </span>
             )}
             {/*
-              Apagar só aparece para as criadas aqui. Categoria do ERP voltaria
-              na próxima sincronização, e o botão teria prometido o que não se
-              cumpre.
+              Apagar só aparece para as criadas aqui. Categoria vinda da carga
+              do catálogo voltaria na próxima carga, e o botão teria prometido o
+              que não se cumpre.
             */}
             {categoria.manual && (
               <button
@@ -163,8 +164,8 @@ function LinhaDaCategoria({ categoria, grupos, membros, onApagar }: {
           </div>
           {/*
             "Mostrar na home" é por categoria, e não uma lista fixa de seis:
-            com dezenas de categorias vindas do ERP, quem escolhe quais merecem
-            a home é quem conhece a loja.
+            com dezenas de categorias no catálogo, quem escolhe quais merecem a
+            home é quem conhece a loja.
           */}
           <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 flex-shrink-0 cursor-pointer">
             <input
@@ -190,10 +191,10 @@ function LinhaDaCategoria({ categoria, grupos, membros, onApagar }: {
         {/*
           O seletor de categoria geral é o coração desta tela.
 
-          O ERP manda "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D"
-          soltas, no mesmo nível. Aqui a loja as pendura numa "Pirâmides" —
-          e nenhum produto se move: cada um continua na categoria do ERP, e é
-          a navegação que passa a somar os filhos.
+          O catálogo traz "Pirâmides de Cristal", "de Madeira" e "de Impressão
+          3D" soltas, no mesmo nível. Aqui a loja as pendura numa "Pirâmides" —
+          e nenhum produto se move: cada um continua na categoria em que foi
+          cadastrado, e é a navegação que passa a somar os filhos.
         */}
         {membros === 0 && (
           <label className="flex items-center gap-2 text-xs text-gray-600">
@@ -321,17 +322,16 @@ export default function VitrineCategoriasAdmin() {
         {/*
           Criar categoria geral.
 
-          O ERP manda "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D"
-          soltas, todas no mesmo nível — não existe uma "Pirâmides" para o
-          cliente clicar. Esta é a forma de a loja criar a sua, sem depender de
-          o ERP passar a mandar a hierarquia.
+          O catálogo traz "Pirâmides de Cristal", "de Madeira" e "de Impressão
+          3D" soltas, todas no mesmo nível — não existe uma "Pirâmides" para o
+          cliente clicar. Esta é a forma de a loja criar a sua.
         */}
         <div className="mt-5 p-4 bg-gray-50 rounded-xl border border-gray-150">
           <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">
             Criar categoria geral
           </p>
           <p className="text-[11px] text-gray-500 mt-1 leading-relaxed max-w-2xl">
-            Para juntar várias categorias do ERP sob um nome só — por exemplo, uma
+            Para juntar várias categorias sob um nome só — por exemplo, uma
             <strong> Pirâmides</strong> reunindo “Pirâmides de Cristal”, “de Madeira” e “de
             Impressão 3D”. Depois de criar, escolha em cada uma delas o campo
             <strong> Dentro de</strong>. Nenhum produto muda de lugar.

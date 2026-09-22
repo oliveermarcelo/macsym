@@ -6,7 +6,8 @@ vídeo para videoconferência, com painel administrativo próprio.
 > Este repositório nasceu do projeto **queops** (mesma engine de loja) e foi
 > adaptado para a Macsym Tecnologia Eletrônica: identidade, paleta, taxonomia
 > de catálogo e textos são desta loja; motor de preços, pagamento, sessão e a
-> integração com o UNO ERP são os mesmos, já testados.
+> API pública são os mesmos, já testados. O catálogo veio de uma importação do
+> WooCommerce e é mantido pelo painel — não há integração com ERP.
 
 - **Vitrine** (`/`) — catálogo, busca, filtros, carrinho, checkout em 3 etapas e área do cliente.
 - **Painel** (`/admin`) — dashboard, produtos, pedidos, clientes, cupons, frete, carrinhos
@@ -122,7 +123,7 @@ quiser. Qualquer arquivo pode ser trocado à mão nas pastas acima.
 
 ## API pública (v1)
 
-Para ERP e automações (n8n, Make, Zapier). Gere uma chave em
+Para automações (n8n, Make, Zapier) e integrações próprias. Gere uma chave em
 **Painel → Integrações → API** e envie no header:
 
 ```bash
@@ -192,7 +193,7 @@ server/
     pricing.ts       frete, cupom e desconto Pix — as regras de dinheiro
     store.ts         configurações da loja e conversão banco → front
     crypto.ts        AES-256-GCM das credenciais de integração
-    providers.ts     handshake com gateways/WhatsApp/ERP + proteção contra SSRF
+    providers.ts     handshake com gateways/WhatsApp/chat + proteção contra SSRF
     routes/          público, conta do cliente, painel, API v1
     migrate.ts       instalador do banco (linha de comando)
     diagnostico.ts   checagem da instalação, para rodar no servidor
@@ -224,12 +225,12 @@ da transação que baixa o estoque.
   com o estado no MySQL e o identificador trocado a cada login.
 - Token CSRF exigido em toda requisição que altera dados.
 - Bloqueio após 8 tentativas de login erradas em 15 minutos (por e-mail e por IP).
-- Credenciais de integrações (Stripe, Mercado Pago, Z-API, ERP…) cifradas com
+- Credenciais de integrações (Stripe, Mercado Pago, Z-API…) cifradas com
   AES-256-GCM no banco e **nunca** enviadas ao navegador — o handshake com cada
   provedor acontece no servidor.
 - Todas as consultas usam prepared statements com parâmetros.
 - CSP restritiva; `frame-ancestors` e HSTS enviados como header pelo Express.
-- URLs de ERP e webhook são recusadas quando apontam para endereços internos
+- URLs de integração e webhook são recusadas quando apontam para endereços internos
   (loopback, redes privadas, metadados de nuvem) — evita usar o painel para
   varrer a rede do servidor.
 

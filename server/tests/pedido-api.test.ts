@@ -1,8 +1,8 @@
 /**
- * Formato do pedido na API — o contrato que o ERP consome.
+ * Formato do pedido na API — o contrato que as automações consomem.
  *
  * `orderRowToApi` é pura, então dá para fixar o contrato sem banco. E vale
- * fixar: o ERP do cliente lê estes nomes de campo para emitir nota e etiqueta.
+ * fixar: quem integra lê estes nomes de campo para emitir nota e etiqueta.
  * Renomear ou trocar o tipo de qualquer um deles aqui é quebrar a integração do
  * outro lado — quem faz a mudança precisa ver um teste vermelho antes de
  * descobrir pelo suporte.
@@ -56,11 +56,11 @@ test('o pedido leva o endereço de entrega completo', () => {
     city: 'Jacobina',
     state: 'BA',
     /*
-     * Campos pedidos pelo integrador do ERP.
+     * Campos pedidos por quem consome a API v1.
      *
      * `recipientName` e `phone` caem para os do comprador quando ninguém
      * informou um destinatário diferente — repetir o dado é melhor do que o
-     * ERP ter de adivinhar de onde tirar quem recebe numa entrega para
+     * outro lado ter de adivinhar de onde tirar quem recebe numa entrega para
      * terceiro. `country` existia só na cabeça de quem lia o CEP. E
      * `cityIbgeCode` é null de propósito: a loja não coleta, e um código
      * deduzido por nome + UF apenas moveria o erro de homônimo para dentro da
@@ -93,11 +93,12 @@ test('transportadora escolhida e previsão de entrega saem no pedido', () => {
 });
 
 /**
- * O CPF sai no pedido porque o ERP emite NF-e ao consumidor.
+ * O CPF sai no pedido porque quem integra emite NF-e ao consumidor.
  *
  * Fica pinado aqui por dois motivos opostos, e os dois importam: remover o
- * campo para o ERP de nota, e mudar o tipo quando o comprador não informou.
- * Se virar `null` em vez de `''`, o lado do ERP que faz `.replace(/\D/g, '')`
+ * campo para quem emite a nota, e mudar o tipo quando o comprador não
+ * informou. Se virar `null` em vez de `''`, o lado de lá que faz
+ * `.replace(/\D/g, '')`
  * quebra no pedido sem CPF — que é exatamente o caso menos testado lá.
  */
 test('CPF do comprador sai no pedido, e vazio é string vazia', () => {

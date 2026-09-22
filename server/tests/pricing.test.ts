@@ -150,8 +150,8 @@ test('arredondamento igual ao do PHP', () => {
  * `pesoEmGramas` deixou de ser a via principal: hoje o peso mora em
  * `products.weight_kg`, numérico. Ele continua existindo, e continua testado,
  * porque ainda lê o rótulo de medida de quem cadastrou "800g" ali antes da
- * separação dos campos — e porque é ele que converte o texto que o ERP
- * eventualmente mande no lugar do número.
+ * separação dos campos — e porque é ele que converte o texto que uma carga
+ * de catálogo eventualmente traga no lugar do número.
  *
  * O caso que motivou o teste: "1.5 kg" era lido como 15 kg, porque o ponto
  * decimal estava sendo removido como se fosse separador de milhar. O frete
@@ -234,7 +234,7 @@ test('peso vem do campo numérico; o rótulo é só reserva', () => {
 /**
  * A transportadora do pedido sai da COTAÇÃO, nunca do texto do rótulo.
  *
- * Este teste nasceu de um defeito encontrado pelo integrador do ERP: os campos
+ * Este teste nasceu de um defeito encontrado por quem consome a API v1: os campos
  * `shippingCarrier`, `shippingServiceCode` e `shippingServiceName` chegavam
  * sempre vazios. A causa era ler a transportadora da cotação feita DENTRO da
  * transação do pedido — que recebe o frete já resolvido justamente para não
@@ -277,7 +277,7 @@ test('sem cotação, a transportadora é a que a loja declarou — ou nenhuma', 
 
   /*
    * Frete pela tabela do painel: não houve cotação, então não há transportadora
-   * a afirmar. Vazio vira null no pedido, e o ERP usa o padrão dele — que é
+   * a afirmar. Vazio vira null no pedido, e quem despacha usa o padrão dele — que é
    * exatamente o que acontecia antes destes campos existirem.
    */
   assert.equal(dadosDaTransportadora(semOpcoes).carrier, '', 'nada declarado, nada afirmado');

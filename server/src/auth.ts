@@ -32,8 +32,8 @@ const ROUNDS_SENHA = 12;
  *
  * O token tem 160 bits de entropia aleatória, então não existe "adivinhar a
  * senha" a defender; o hash serve só para que um banco vazado não entregue
- * chaves utilizáveis. Um ERP que consulta a API a cada minuto não deve pagar
- * 300 ms de CPU por requisição para proteger um segredo que já é forte.
+ * chaves utilizáveis. Uma automação que consulta a API a cada minuto não deve
+ * pagar 300 ms de CPU por requisição para proteger um segredo que já é forte.
  */
 const ROUNDS_TOKEN = 10;
 
@@ -227,17 +227,19 @@ export async function currentApiKey(req: Request): Promise<Row | null> {
       /*
        * O teste feito pelo painel NÃO conta como uso.
        *
-       * `last_used_at` responde a uma pergunta específica: "o ERP já chamou a
-       * loja?". É o diagnóstico mais útil que a loja tem quando o outro lado
-       * jura que integrou — se nada chegou, o problema está antes daqui.
+       * `last_used_at` responde a uma pergunta específica: "a automação já
+       * chamou a loja?". É o diagnóstico mais útil que a loja tem quando o
+       * outro lado jura que integrou — se nada chegou, o problema está antes
+       * daqui.
        *
        * Se o botão "Testar" do painel gravasse uso, a resposta viraria "sim,
        * alguém chamou" logo depois do primeiro clique — e o dono passaria a ler
-       * como confirmação do ERP a própria chamada dele. Uma evidência que se
-       * contamina ao ser consultada não serve de evidência.
+       * como confirmação do outro lado a própria chamada dele. Uma evidência
+       * que se contamina ao ser consultada não serve de evidência.
        *
        * A distinção é a sessão de admin: ela vem do cookie httpOnly do painel,
-       * que só existe em quem entrou no painel. Nenhum ERP tem esse cookie, e
+       * que só existe em quem entrou no painel. Nenhuma automação tem esse
+       * cookie, e
        * ler isso não custa consulta nenhuma — a sessão já foi decodificada
        * pelo middleware.
        */

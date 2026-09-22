@@ -168,8 +168,8 @@ publicRoutes.post('/orders', h(async (req, res) => {
    * A UF SAI DO CEP, não do que o comprador escolheu.
    *
    * O checkout tinha uma lista de estados com "SP" pré-selecionado, e quem não
-   * trocava mandava SP com um CEP da Bahia. O pedido ia para o ERP assim, e a
-   * NF-e saía com destino e ICMS errados — e o ERP não tem como desconfiar,
+   * trocava mandava SP com um CEP da Bahia. O pedido era gravado assim, e a
+   * NF-e saía com destino e ICMS errados — quem emite não tem como desconfiar,
    * porque confia no que a loja manda.
    *
    * O CEP já carrega o estado, e a loja já sabe lê-lo (é assim que o frete é
@@ -274,8 +274,8 @@ publicRoutes.post('/orders', h(async (req, res) => {
   /*
    * A TRANSPORTADORA SAI DA `previa`, e não da cotação de dentro da transação.
    *
-   * Esta linha é a correção de um defeito que o integrador do ERP encontrou:
-   * os campos `shippingCarrier`, `shippingServiceCode` e `shippingServiceName`
+   * Esta linha é a correção de um defeito encontrado por quem consome a API
+   * v1: os campos `shippingCarrier`, `shippingServiceCode` e `shippingServiceName`
    * chegavam SEMPRE vazios, com ou sem transportadora ligada.
    *
    * O motivo é sutil. A cotação de dentro da transação recebe `freteFixado`
@@ -369,7 +369,7 @@ publicRoutes.post('/orders', h(async (req, res) => {
            * Custo do frete para a loja. Hoje é o mesmo que o cliente pagou —
            * a loja não subsidia. Gravado separado porque no dia em que
            * subsidiar (frete grátis acima de um valor já é um caso), a margem
-           * do pedido no ERP sairia errada se os dois números fossem um só.
+           * apurada do pedido sairia errada se os dois números fossem um só.
            */
           quote.shipping,
           quote.couponDiscount, quote.pixDiscount,
@@ -394,14 +394,14 @@ publicRoutes.post('/orders', h(async (req, res) => {
              *
              * Vem da coluna `sku` do produto e cai para o id quando ela está
              * vazia — hoje os dois coincidem, porque todo produto nasce no
-             * ERP. Gravar no item, e não deduzir na leitura, é o que mantém o
+             * importação. Gravar no item, e não deduzir na leitura, mantém o
              * pedido antigo legível se o produto for renomeado ou apagado
              * depois.
              */
             it.sku || it.productId,
             it.name, it.quantity, it.unitPrice,
             // Desconto por item: a loja desconta no rodapé do pedido, não na
-            // linha. Zero explícito diz isso ao ERP, em vez de omitir.
+            // linha. Zero explícito diz isso a quem lê, em vez de omitir.
             0,
             it.lineTotal,
           ],

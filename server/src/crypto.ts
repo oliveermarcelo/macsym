@@ -1,7 +1,7 @@
 /**
  * Cifragem simétrica das credenciais de integração (AES-256-GCM).
  *
- * Motivo: tokens de ERP, Z-API, Mercado Pago e afins são segredos de terceiros.
+ * Motivo: tokens de Z-API, Mercado Pago e afins são segredos de terceiros.
  * Guardá-los em texto puro significa que qualquer leitura indevida do banco
  * (backup vazado, injeção de SQL em outro sistema, acesso ao phpMyAdmin)
  * entrega as chaves da operação inteira. Com GCM ganhamos também autenticação:

@@ -111,37 +111,37 @@ CREATE TABLE IF NOT EXISTS categories (
   -- Vitrine da categoria: foto, frase e se aparece na home.
   --
   -- A seção "Explore por categoria" era SEIS CARTÕES CRAVADOS no código, com
-  -- id, nome, frase e foto fixos. Depois que a loja passou a espelhar a árvore
-  -- do ERP, esses ids deixaram de existir: os cartões continuavam bonitos na
-  -- home e levavam a uma lista vazia.
+  -- id, nome, frase e foto fixos. Quando o catálogo real entrou, esses ids
+  -- deixaram de existir: os cartões continuavam bonitos na home e levavam a
+  -- uma lista vazia.
   --
   -- `home` existe separado de `featured` porque são coisas diferentes:
   -- `featured` é o destaque do menu (Promoções, Novidades), e este é "mostrar
-  -- na home". Mostrar TODAS seria inviável — o ERP manda dezenas.
+  -- na home". Mostrar TODAS seria inviável — o catálogo tem dezenas.
   --
-  -- Estes três campos são da LOJA, não do ERP: o espelhamento os preserva por
-  -- slug, senão cada sincronização apagaria as fotos que alguém subiu à mão.
+  -- Estes três campos são da VITRINE, e não do catálogo importado: uma nova
+  -- carga preserva o que foi editado por slug, senão ela apagaria as fotos que
+  -- alguém subiu à mão.
   -- ---------------------------------------------------------------------
   image       VARCHAR(500) NOT NULL DEFAULT '',
   blurb       VARCHAR(160) NOT NULL DEFAULT '',
   home        TINYINT(1)   NOT NULL DEFAULT 0,
   -- ---------------------------------------------------------------------
-  -- Agrupamento feito pela LOJA, por cima do que o ERP manda.
+  -- Agrupamento feito pela LOJA, por cima do catálogo.
   --
-  -- O ERP manda "Pirâmides de Cristal", "de Madeira", "de Impressão 3D" como
-  -- categorias SOLTAS, todas no mesmo nível — ele tem o campo de hierarquia e
-  -- não o usa. O resultado é um menu com dezenas de irmãs e nenhuma categoria
-  -- "Pirâmides" para o cliente clicar.
+  -- O catálogo traz "Pirâmides de Cristal", "de Madeira", "de Impressão 3D"
+  -- como categorias SOLTAS, todas no mesmo nível. O resultado é um menu com
+  -- dezenas de irmãs e nenhuma categoria "Pirâmides" para o cliente clicar.
   --
   -- `group_id` aponta para outra linha desta mesma tabela: a categoria geral.
   -- Agrupar NÃO move produto nenhum — cada produto continua apontando para a
-  -- categoria do ERP em que o ERP o colocou, e é a navegação da loja que passa
-  -- a somar os filhos. Assim a integração continua intacta, e desagrupar é
-  -- tirar uma referência, não remexer 1.400 produtos.
+  -- categoria em que foi cadastrado, e é a navegação da loja que passa a somar
+  -- os filhos. Assim desagrupar é tirar uma referência, e não remexer 1.400
+  -- produtos.
   --
-  -- `manual` marca a categoria criada no painel: o espelhamento do ERP apaga e
-  -- recria as linhas a partir do que o ERP mandou, e apagaria junto a categoria
-  -- geral que o ERP não conhece.
+  -- `manual` marca a categoria criada no painel: uma nova carga do catálogo
+  -- recria as linhas que vieram dele, e apagaria junto a categoria geral que o
+  -- catálogo não conhece.
   -- ---------------------------------------------------------------------
   group_id    VARCHAR(100) NULL,
   manual      TINYINT(1)   NOT NULL DEFAULT 0,
@@ -163,42 +163,6 @@ CREATE TABLE IF NOT EXISTS subcategories (
     REFERENCES categories (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ---------------------------------------------------------------------
--- Categorias do ERP
--- ---------------------------------------------------------------------
--- A lista de categorias como o ERP a envia, MAIS a amarração com a árvore da
--- loja. Duas listas separadas, e não uma só, por um motivo concreto: elas não
--- são a mesma coisa.
---
--- O ERP identifica categoria por código e inclui coisas que não são vitrine
--- ("Uso Interno", "Matéria Prima"). A loja identifica por slug — que está na
--- URL pública (/?categoria=piramides) e no sitemap enviado ao Google — e tem
--- dez categorias curadas, com ícone, ordem e destaque. Adotar o código do ERP
--- como identidade da loja trocaria essas URLs por /?categoria=0012 e quebraria
--- tudo o que já está indexado, para resolver um problema que é de integração.
---
--- Então: o código é a chave DA INTEGRAÇÃO, o slug continua sendo a identidade
--- DA LOJA, e esta tabela é a tradução entre os dois.
---
--- `category_id` nulo significa "o ERP mandou, ninguém amarrou ainda". Produto
--- que chegar com esse código é aceito e fica fora da vitrine até alguém
--- decidir onde ele entra — decisão do dono da loja, não do ERP nem do código.
-CREATE TABLE IF NOT EXISTS erp_categories (
-  code           VARCHAR(60)  NOT NULL,        -- identificador no ERP
-  name           VARCHAR(160) NOT NULL,
-  parent_code    VARCHAR(60)  NULL,            -- hierarquia do lado do ERP
-  -- Amarração feita no painel. Nulo = pendente.
-  category_id    VARCHAR(100) NULL,
-  subcategory_id VARCHAR(100) NULL,
-  -- Desligada no ERP: continua aqui para traduzir produto antigo, mas não deve
-  -- ser oferecida como destino de amarração.
-  active         TINYINT(1)   NOT NULL DEFAULT 1,
-  created_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (code),
-  KEY idx_erpcat_mapeada (category_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE IF NOT EXISTS products (
   id                VARCHAR(100)  NOT NULL,
   sku               VARCHAR(64)   NOT NULL DEFAULT '',
@@ -210,14 +174,13 @@ CREATE TABLE IF NOT EXISTS products (
   long_description  MEDIUMTEXT    NULL,
   price             DECIMAL(10,2) NOT NULL DEFAULT 0,
   old_price         DECIMAL(10,2) NULL,
-  -- Estoque é DECIMAL, e não INT: o ERP trabalha o saldo como número
-  -- fracionário. Truncar 7,5 para 7 na sincronização seria uma divergência
-  -- silenciosa — cada sistema confiante no seu número. Quantidade de item
-  -- vendido continua inteira; saldo, não.
+  -- Estoque é DECIMAL, e não INT: a loja vende por peso e por metro, então o
+  -- saldo é fracionário. Truncar 7,5 para 7 seria uma divergência silenciosa —
+  -- o painel e a prateleira discordando sem nada acusar.
   stock             DECIMAL(10,3) NOT NULL DEFAULT 0,
   image             VARCHAR(500)  NOT NULL DEFAULT '',
   tag               VARCHAR(40)   NULL,
-  -- Peso da peça em QUILOS: é o que o frete usa e o que o ERP envia.
+  -- Peso da peça em QUILOS: é a unidade que o cálculo de frete usa.
   weight_kg         DECIMAL(10,3) NOT NULL DEFAULT 0,
   -- Texto de medida/formato exibido na página do produto ("Base 15cm · cobre").
   -- Já serviu de peso, e o frete tentava achar o número no meio da frase. Hoje
@@ -226,18 +189,6 @@ CREATE TABLE IF NOT EXISTS products (
   ingredients       TEXT          NULL,
   highlight         TINYINT(1)    NOT NULL DEFAULT 0,
   active            TINYINT(1)    NOT NULL DEFAULT 1,
-  -- Campos editados no painel, que o ERP não sobrescreve (ex.: "price,stock").
-  -- É o que concilia "o ERP é a fonte da verdade" com "o painel precisa ter
-  -- autonomia": sem isto, o ajuste manual volta sozinho no próximo ciclo.
-  locked_fields     VARCHAR(255)  NOT NULL DEFAULT '',
-  -- Código de categoria que o ERP mandou e a loja ainda não sabia traduzir.
-  --
-  -- Guardar isto é o que permite ao produto entrar na vitrine sozinho no
-  -- instante da amarração, sem o ERP reenviar. Sem a coluna, a loja não teria
-  -- como saber quais produtos estavam esperando por qual código, e um ERP que
-  -- guarda "essa categoria eu já mandei" nunca mais tocaria no assunto — os
-  -- produtos ficariam invisíveis para sempre, sem erro em lugar nenhum.
-  pending_category_code VARCHAR(60) NOT NULL DEFAULT '',
   position          INT           NOT NULL DEFAULT 0,
   created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -322,20 +273,21 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   -- -------------------------------------------------------------------
-  -- Campos que o ERP precisa para faturar, e que o pedido não guardava.
+  -- Campos que quem fatura precisa, e que o pedido não guardava.
   --
   -- DATAS DE TRANSIÇÃO. `paid_at` já existia; faltavam as outras três. Sem
-  -- elas, e sem `updated_at` no filtro, a varredura periódica do ERP só
+  -- elas, e sem `updated_at` no filtro, a varredura periódica da API v1 só
   -- enxerga pedido NOVO: um pedido criado ontem e pago hoje, cujo webhook
   -- falhou, fica parado para sempre — o pior defeito possível aqui.
   --
   -- EIXOS SEPARADOS. `status` sozinho colapsa pagamento e logística: quando
   -- o pedido avança para "shipped", a informação "foi pago" some do campo e
   -- não há como reconstruí-la. E "canceled" não distingue pagamento recusado
-  -- de desistência do cliente, que geram lançamentos diferentes no ERP.
+  -- de desistência do cliente, que geram lançamentos diferentes na
+  -- contabilidade.
   -- `status` continua existindo e mandando; estes são a leitura por eixo.
   --
-  -- FRETE EM PARTES. O ERP acha a transportadora pelo nome; recebendo
+  -- FRETE EM PARTES. Quem despacha acha a transportadora pelo nome; recebendo
   -- "PAC — até 7 dias úteis" ele nunca casa e joga tudo na transportadora
   -- padrão. E `shipping_cost_owner` separa o que a loja PAGA do que ela
   -- COBRA: iguais hoje, mas se a loja subsidiar frete a margem sai errada.
@@ -346,7 +298,7 @@ CREATE TABLE IF NOT EXISTS orders (
   payment_status  VARCHAR(20)   NOT NULL DEFAULT 'pending',  -- pending|paid|refused|refunded
   fulfillment_status VARCHAR(20) NOT NULL DEFAULT 'unpacked', -- unpacked|shipped|delivered
   cancel_reason   VARCHAR(200)  NOT NULL DEFAULT '',
-  canceled_by     VARCHAR(20)   NOT NULL DEFAULT '',         -- customer|store|gateway|erp
+  canceled_by     VARCHAR(20)   NOT NULL DEFAULT '',         -- customer|store|gateway|api
   payment_brand   VARCHAR(30)   NOT NULL DEFAULT '',         -- visa, master… (cartão)
   payment_installments INT      NOT NULL DEFAULT 0,
   paid_amount     DECIMAL(10,2) NULL,
@@ -357,12 +309,13 @@ CREATE TABLE IF NOT EXISTS orders (
   shipping_max_days INT         NOT NULL DEFAULT 0,
   shipping_cost_owner DECIMAL(10,2) NULL,
   tracking_url    VARCHAR(300)  NOT NULL DEFAULT '',
-  -- Desconto repartido por origem: o ERP não sabe separar cupom de Pix a
+  -- Desconto repartido por origem: não há como separar cupom de Pix a
   -- partir de um número só, e os dois viram lançamentos diferentes.
   discount_coupon DECIMAL(10,2) NOT NULL DEFAULT 0,
   discount_payment DECIMAL(10,2) NOT NULL DEFAULT 0,
   customer_note   VARCHAR(500)  NOT NULL DEFAULT '',
-  -- Entrega para terceiro, e o país que o ERP hoje chuta como "BRASIL".
+  -- Entrega para terceiro, e o país que, sem o campo, quem fatura chuta como
+  -- "BRASIL".
   ship_recipient  VARCHAR(160)  NOT NULL DEFAULT '',
   ship_phone      VARCHAR(30)   NOT NULL DEFAULT '',
   ship_country    CHAR(2)       NOT NULL DEFAULT 'BR',
@@ -372,7 +325,7 @@ CREATE TABLE IF NOT EXISTS orders (
   KEY idx_order_created (created_at),
   KEY idx_order_status (status),
   KEY idx_order_email (customer_email),
-  -- O filtro da varredura do ERP (?updatedSince=) percorre esta coluna.
+  -- O filtro da varredura da API v1 (?updatedSince=) percorre esta coluna.
   KEY idx_order_updated (updated_at),
   UNIQUE KEY uq_order_payment_ref (payment_ref)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -380,8 +333,9 @@ CREATE TABLE IF NOT EXISTS orders (
 -- ---------------------------------------------------------------------
 -- Itens do pedido.
 --
--- `sku` é gravado explicitamente, e não deduzido do `product_id`. O ERP casa
--- produto POR SKU; hoje os dois coincidem porque todo produto nasce no ERP,
+-- `sku` é gravado explicitamente, e não deduzido do `product_id`. Quem integra
+-- casa produto POR SKU; hoje os dois coincidem porque o catálogo veio de uma
+-- importação,
 -- mas isso é convenção, não contrato — no dia em que alguém cadastrar um
 -- produto pelo painel da loja, o id deixa de ser um código de produto e a
 -- amarração quebraria em silêncio, item a item.
@@ -390,7 +344,8 @@ CREATE TABLE IF NOT EXISTS orders (
 -- metro, e uma quantidade inteira truncaria 1,5 kg para 1 kg na hora de
 -- faturar.
 --
--- `total_price` é gravado, e não só calculado na leitura, para o ERP ter
+-- `total_price` é gravado, e não só calculado na leitura, para quem lê o
+-- pedido ter
 -- contra o que conferir o arredondamento do subtotal.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS order_items (

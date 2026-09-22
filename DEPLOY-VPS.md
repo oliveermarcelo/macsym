@@ -42,7 +42,7 @@ FORCE_HTTPS=false
 ENV
 
 # APP_KEY (32 bytes em base64). GUARDE: trocá-la depois torna ilegíveis as
-# credenciais de Mercado Pago, ERP e WhatsApp já salvas no banco.
+# credenciais de Mercado Pago e WhatsApp já salvas no banco.
 sed -i "s|^APP_KEY=.*|APP_KEY=$(openssl rand -base64 32)|" .env
 grep APP_KEY .env
 ```

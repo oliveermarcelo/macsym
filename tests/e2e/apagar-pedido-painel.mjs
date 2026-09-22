@@ -143,7 +143,7 @@ const lixeira = linha.locator('button').last();
  * Cancelar passa pelo diálogo do motivo.
  *
  * Escolher "cancelado" na lista não aplica mais direto: abre a caixa que
- * pergunta POR QUÊ, porque o ERP precisa distinguir "cliente desistiu" de
+ * pergunta POR QUÊ, porque a contabilidade precisa distinguir "cliente desistiu" de
  * "pagamento recusado" — a partir de `status = "canceled"` sozinho não há como
  * saber qual dos dois foi.
  */

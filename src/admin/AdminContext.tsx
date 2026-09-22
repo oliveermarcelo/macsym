@@ -71,23 +71,6 @@ interface AdminContextValue {
   setPanelUserActive: (id: string, active: boolean) => Promise<void>;
   resetPanelUserPassword: (id: string, password: string) => Promise<void>;
   changeOwnPassword: (currentPassword: string, newPassword: string) => Promise<void>;
-
-  /**
-   * Amarra um código de categoria do ERP à árvore da loja. `null` desamarra.
-   * Devolve quantos produtos represados entraram na vitrine com a amarração.
-   */
-  linkErpCategory: (
-    code: string, category: string | null, subcategory: string | null,
-  ) => Promise<number>;
-
-  /**
-   * Substitui a árvore da loja por uma cópia da do ERP. Destrutivo — a tela
-   * confirma antes. Recarrega o estado inteiro: o menu inteiro mudou.
-   */
-  espelharCategoriasDoErp: () => Promise<{
-    categorias: number; subcategorias: number; amarrados: number;
-    orfaos: number; apagadas: number; warnings: string[];
-  }>;
 }
 
 const Ctx = createContext<AdminContextValue | null>(null);
@@ -106,7 +89,7 @@ const EMPTY: AdminState = {
   integrations: {} as AdminState['integrations'],
   abandonedCarts: [], recovery: { enabled: false, delayMinutes: 60, message: '', couponCode: '' },
   apiKeys: [], webhooks: [], users: [],
-  erpCategories: [], productsWithoutCategory: 0, productsWithActiveOrders: [],
+  productsWithActiveOrders: [],
   shipping: {
     defaultPrice: 0, perState: {}, cepRanges: [],
     freeShipping: { enabled: false, minOrder: 0, states: [] },
@@ -392,27 +375,6 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       },
 
       changeOwnPassword: (atual, nova) => store.changeOwnPassword(atual, nova),
-
-      linkErpCategory: async (code, category, subcategory) => {
-        const r = await store.linkErpCategory(code, category, subcategory);
-        if (alive.current) {
-          setState((s) => ({
-            ...s,
-            erpCategories: r.erpCategories,
-            productsWithoutCategory: r.productsWithoutCategory,
-          }));
-        }
-        // Quantos produtos entraram na vitrine com este clique — a tela avisa.
-        return r.released;
-      },
-
-      espelharCategoriasDoErp: async () => {
-        const r = await store.espelharCategoriasDoErp();
-        // O menu, os produtos e as amarrações mudaram todos de uma vez: aqui
-        // uma atualização parcial mentiria mais do que ajudaria.
-        await refresh();
-        return r;
-      },
     }),
     [state, loading, error, mutate, refresh, aplicarUsuarios],
   );

@@ -198,16 +198,16 @@ export async function resolveCoupon(
  *
  * Existe como função, e recebendo a cotação inteira, porque a informação só
  * está completa em UM lugar: a lista de opções cotadas. Tirá-la do rótulo
- * ("PAC — até 7 dias úteis") por fatiamento de texto é o que o ERP faz hoje na
- * falta dela, e qualquer mudança nesse rótulo — trocar um traço por outro —
- * mudaria em silêncio a transportadora do pedido no ERP.
+ * ("PAC — até 7 dias úteis") por fatiamento de texto é o que sobra a quem
+ * recebe o pedido na falta dela, e qualquer mudança nesse rótulo — trocar um
+ * traço por outro — mudaria em silêncio a transportadora do pedido lá fora.
  *
  * Quando o frete vem da TABELA DO PAINEL, e não de uma cotação, não existe
  * transportadora a informar: a lojista definiu um preço por estado ou faixa de
  * CEP, e quem entrega é decisão dela na hora de despachar. Nesse caso sai o que
  * ela tiver configurado como transportadora padrão — e, se não configurou,
- * vazio, que o ERP lê como null e resolve pelo padrão dele. Chutar "Correios"
- * seria afirmar algo que a loja não sabe.
+ * vazio, que sai como null no pedido para o outro lado resolver pelo padrão
+ * dele. Chutar "Correios" seria afirmar algo que a loja não sabe.
  */
 export interface DadosDaTransportadora {
   carrier: string;
@@ -249,7 +249,7 @@ export function dadosDaTransportadora(
 
 export interface QuoteItem {
   productId: string;
-  /** SKU do produto — é por ele que o ERP casa o item. */
+  /** SKU do produto — é por ele que quem integra casa o item. */
   sku: string;
   name: string;
   quantity: number;
@@ -367,7 +367,7 @@ function pesoDoCarrinho(
   if (semPeso.length > 0) {
     console.warn(
       '[macsym] frete cotado com peso padrão (500 g/item) para: ' + semPeso.join(', ')
-      + ' — preencha o peso em Painel → Produtos, ou pelo ERP.',
+      + ' — preencha o peso em Painel → Produtos.',
     );
   }
   return Math.max(300, Math.round(total));
@@ -604,7 +604,7 @@ export async function quoteCart(
    * vazia. Como o checkout tinha uma lista de estados com "SP" pré-selecionado,
    * quem digitava um CEP da Bahia e não trocava o estado cotava frete de São
    * Paulo e gravava o pedido como SP — e a nota fiscal saía com destino e ICMS
-   * errados, sem que o ERP tivesse como desconfiar.
+   * errados, sem que quem emite a nota tivesse como desconfiar.
    *
    * A UF digitada só vale quando o CEP não cai em nenhuma faixa conhecida: aí
    * o que a pessoa afirmou é a melhor informação disponível.
@@ -667,9 +667,10 @@ export async function quoteCart(
       /*
        * SKU do produto, para ser gravado no item do pedido.
        *
-       * O ERP casa produto por SKU. Hoje ele é igual ao id porque todo produto
-       * nasce lá, mas isso é convenção e não contrato — quando um produto
-       * nascer no painel da loja, o id deixa de ser um código de produto.
+       * Quem integra casa produto por SKU. Hoje ele é igual ao id porque o
+       * catálogo veio de uma importação, mas isso é convenção e não contrato —
+       * um produto cadastrado no painel ganha um id que não é código de
+       * produto nenhum.
        */
       sku: String(p.sku ?? ''),
       name: String(p.name),

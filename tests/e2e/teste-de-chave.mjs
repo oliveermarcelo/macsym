@@ -105,10 +105,10 @@ await linhaA.screenshot({ path: 'tests/e2e/.saida/teste-de-chave.png' });
 /*
  * O teste do painel NÃO pode contar como uso.
  *
- * `last_used_at` existe para responder "o ERP já chamou a loja?". Se o próprio
- * botão de testar gravasse uso, a resposta viraria "sim" logo depois do
+ * `last_used_at` existe para responder "a automação já chamou a loja?". Se o
+ * próprio botão de testar gravasse uso, a resposta viraria "sim" logo depois do
  * primeiro clique, e o dono leria a chamada dele mesmo como confirmação do
- * ERP. Por isso a chamada com sessão de admin é ignorada no registro.
+ * outro lado. Por isso a chamada com sessão de admin é ignorada no registro.
  */
 await page.reload({ waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);

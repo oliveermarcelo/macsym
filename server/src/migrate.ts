@@ -232,7 +232,7 @@ async function seedDemoOrders(): Promise<void> {
   ];
   const statuses = ['paid', 'shipped', 'delivered', 'delivered', 'delivered', 'pending', 'canceled'];
   const payments = ['card', 'pix', 'boleto'];
-  const channels = ['site', 'whatsapp', 'erp'];
+  const channels = ['site', 'whatsapp'];
 
   // PRNG determinístico: rodar de novo gera exatamente os mesmos números.
   let seed = 20240601;
@@ -293,7 +293,7 @@ async function seedDemoOrders(): Promise<void> {
           subtotal, ship, round2(subtotal + ship),
           statuses[Math.floor(rng() * statuses.length)],
           payments[Math.floor(rng() * 3)],
-          channels[Math.floor(rng() * 3)],
+          channels[Math.floor(rng() * channels.length)],
           'SP', quando,
         ],
       );

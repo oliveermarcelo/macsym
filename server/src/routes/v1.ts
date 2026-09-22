@@ -1,6 +1,6 @@
 /**
- * API pública v1 — para ERP, automações (n8n, Make, Zapier) e integrações
- * próprias. Autentica por chave gerada no painel, em
+ * API pública v1 — para automações (n8n, Make, Zapier) e integrações próprias.
+ * Autentica por chave gerada no painel, em
  * `Authorization: Bearer qp_live_...`, e não usa cookie nem CSRF: é
  * comunicação servidor-a-servidor, então não há requisição forjada pelo
  * navegador a barrar.
@@ -15,12 +15,7 @@ import { Router } from 'express';
 import { requireApiKey } from '../auth.ts';
 import { placeholders, q, type Row } from '../db.ts';
 import { fail } from '../errors.ts';
-import {
-  amarrarCategoria, carregarCategorias, erpCategoriaParaApi, mapaDeCodigos, normalizarCodigo,
-  produtosSemCategoria, traduzirCodigo,
-} from '../erp-categorias.ts';
-import { gravarProdutoDoErp } from '../erp-produtos.ts';
-import { body, bodyFloat, bodyInt, bodyStr, iso, jsonOk, queryStr } from '../http.ts';
+import { body, bodyFloat, bodyStr, iso, jsonOk, queryStr } from '../http.ts';
 import { fireWebhooks } from '../providers.ts';
 import { fetchProducts, orderRowToApi, productRowToApi, transicaoDeStatus } from '../store.ts';
 import { h } from './helpers.ts';
@@ -29,215 +24,14 @@ export const v1Routes = Router();
 
 const STATUS_PEDIDO = ['pending', 'paid', 'shipped', 'delivered', 'canceled'];
 
-/**
- * Teto do lote de categorias.
- *
- * Mais alto que o de produtos (200) porque categoria é linha pequena e o ERP
- * manda a lista inteira a cada ciclo — partir isso em páginas obrigaria a loja
- * a saber quando o lote terminou para poder marcar ausências, complicação que
- * não se paga num cadastro dessa ordem de grandeza.
- */
-const LOTE_CATEGORIAS = 2000;
-
-// ------------------------------------------------------- categorias ----
-
-/**
- * PUT /api/v1/categories — o ERP manda a lista inteira de categorias dele.
- *
- * Idempotente e absoluto: manda tudo a cada ciclo, como o estoque. Não apaga o
- * que sumiu do lote — uma carga truncada por timeout apagaria categorias vivas
- * e, com elas, a amarração feita à mão. `active: false` é o jeito de aposentar
- * uma categoria, e é reversível.
- */
-v1Routes.put('/categories', h(async (req, res) => {
-  await requireApiKey(req);
-  const b = body(req);
-  const lote = Array.isArray(b.categories) ? b.categories : null;
-  if (lote === null) {
-    fail('Envie "categories" como uma lista.', 422, 'invalid_batch');
-  }
-  if (lote.length > LOTE_CATEGORIAS) {
-    fail(`Lote grande demais (máximo de ${LOTE_CATEGORIAS}).`, 422, 'batch_too_large');
-  }
-
-  const r = await carregarCategorias(lote);
-  jsonOk(res, {
-    ok: true,
-    ...r,
-    /*
-     * O ERP precisa saber que gravar a categoria não é o mesmo que a loja
-     * poder usá-la. Enquanto houver pendente, produto com aquele código entra
-     * sem categoria e fica fora da vitrine — e isso é decisão do dono da loja,
-     * não falha da integração.
-     */
-    message: r.pendentes === 0
-      ? 'Todas as categorias ativas estão amarradas a uma categoria da loja.'
-      : `${r.pendentes} categoria(s) ainda sem destino na loja. Produto enviado com esses `
-        + 'códigos é aceito, mas fica fora da vitrine até alguém amarrá-los em '
-        + 'Painel → Categorias.',
-  });
-}));
-
-/**
- * GET /api/v1/categories — o que a loja tem, e como isso se liga ao ERP.
- *
- * Devolve as duas listas de propósito: a árvore da loja (com o código do ERP
- * amarrado a cada nó, quando existe) e a lista bruta do ERP com o estado da
- * amarração. Só a primeira não bastaria — o ERP não teria como descobrir que
- * um código que ele mandou está pendente.
- */
-v1Routes.get('/categories', h(async (req, res) => {
-  await requireApiKey(req);
-
-  const erp = await q.all('SELECT * FROM erp_categories ORDER BY name ASC');
-  const porCategoria = new Map<string, Row[]>();
-  for (const e of erp) {
-    if (e.category_id === null) continue;
-    const chave = String(e.category_id);
-    const lista = porCategoria.get(chave);
-    if (lista) lista.push(e);
-    else porCategoria.set(chave, [e]);
-  }
-
-  const subs = new Map<string, Row[]>();
-  for (const s of await q.all('SELECT * FROM subcategories ORDER BY position ASC, name ASC')) {
-    const chave = String(s.parent_id);
-    const lista = subs.get(chave);
-    if (lista) lista.push(s);
-    else subs.set(chave, [s]);
-  }
-
-  const categorias = (await q.all('SELECT * FROM categories ORDER BY position ASC, name ASC'))
-    .map((c) => {
-      const id = String(c.id);
-      const amarradas = porCategoria.get(id) ?? [];
-      return {
-        id,
-        name: String(c.name),
-        // Código amarrado ao nível-mãe (sem subcategoria), quando houver.
-        erpCode: amarradas.find((e) => e.subcategory_id === null)?.code ?? null,
-        subcategories: (subs.get(id) ?? []).map((s) => ({
-          id: String(s.id),
-          name: String(s.name),
-          erpCode: amarradas.find((e) => String(e.subcategory_id) === String(s.id))?.code ?? null,
-        })),
-      };
-    });
-
-  jsonOk(res, {
-    categories: categorias,
-    erpCategories: erp.map(erpCategoriaParaApi),
-    pending: erp.filter((e) => e.category_id === null && Boolean(e.active)).length,
-    productsWithoutCategory: await produtosSemCategoria(),
-  });
-}));
-
-/**
- * PUT /api/v1/categories/{code} — uma categoria só.
- *
- * Existe para o fluxo síncrono: antes de mandar um produto, o ERP manda a
- * categoria dele e só então o produto, garantindo a ordem. Faz o mesmo que a
- * carga em lote, para um item.
- *
- * A resposta traz `linked` porque 200 aqui NÃO significa que o produto vai
- * aparecer na loja. Um ERP que guarda "já integrei essa categoria" para não
- * repetir precisa guardar `linked`, e não o 200 — senão ele marca como
- * resolvido algo que ainda depende de uma decisão humana do outro lado.
- */
-v1Routes.put('/categories/:code', h(async (req, res) => {
-  await requireApiKey(req);
-  const code = String(req.params.code ?? '');
-  const b = body(req);
-
-  const r = await carregarCategorias([{
-    code,
-    name: b.name,
-    parentCode: b.parentCode,
-    active: b.active,
-  }]);
-
-  // Item único: o problema dele é o problema da requisição, e vira 422.
-  if (r.criadas + r.atualizadas === 0) {
-    fail(
-      r.warnings[0] ?? 'Categoria inválida. Informe "name".',
-      422,
-      'invalid_category',
-    );
-  }
-
-  const { destino, nome } = await traduzirCodigo(code);
-  jsonOk(res, {
-    ok: true,
-    code: normalizarCodigo(code),
-    name: nome,
-    created: r.criadas === 1,
-    linked: destino !== null,
-    category: destino?.category ?? null,
-    subcategory: destino?.subcategory ?? null,
-    message: destino !== null
-      ? 'Categoria amarrada. Produto enviado com este código já entra na vitrine.'
-      : 'Categoria registrada, mas ainda SEM destino na loja. O produto é aceito e fica fora da '
-        + 'vitrine até alguém amarrar em Painel → Categorias do ERP — e entra sozinho quando isso '
-        + 'acontecer, sem precisar reenviar.',
-  });
-}));
-
-/**
- * GET /api/v1/categories/{code} — o estado de um código só.
- *
- * Consulta barata para o ERP conferir antes de confiar no cache dele: se
- * guardou "já integrei" quando `linked` era falso, é aqui que ele descobre que
- * a amarração saiu, sem varrer a lista inteira.
- */
-v1Routes.get('/categories/:code', h(async (req, res) => {
-  await requireApiKey(req);
-  const code = normalizarCodigo(String(req.params.code ?? ''));
-  const row = await q.one('SELECT * FROM erp_categories WHERE code = ?', [code]);
-  if (row === null) fail('Categoria não encontrada.', 404, 'not_found');
-
-  const esperando = await q.one(
-    'SELECT COUNT(*) AS n FROM products WHERE pending_category_code = ?',
-    [code],
-  );
-  jsonOk(res, {
-    ...erpCategoriaParaApi(row),
-    /** Produtos parados esperando a amarração deste código. */
-    productsWaiting: Number(esperando?.n ?? 0),
-  });
-}));
-
-/**
- * PUT /api/v1/categories/{code}/link — amarra pela API.
- *
- * A amarração é decisão do dono da loja e acontece no painel; esta rota existe
- * para o caso em que ele já tem a correspondência pronta em planilha e não
- * quer clicar cinquenta vezes. Não é a rota que o ciclo de sincronização deve
- * chamar: se o ERP amarrasse sozinho, a decisão manual perderia o sentido.
- */
-v1Routes.put('/categories/:code/link', h(async (req, res) => {
-  await requireApiKey(req);
-  const b = body(req);
-  const categoria = b.category === null ? null : bodyStr(b, 'category', '', 100);
-  const sub = b.subcategory === null || b.subcategory === undefined
-    ? null
-    : bodyStr(b, 'subcategory', '', 100);
-
-  const { erro, liberados } = await amarrarCategoria(String(req.params.code ?? ''), categoria, sub);
-  if (erro !== '') fail(erro, 422, 'invalid_link');
-  jsonOk(res, { ok: true, released: liberados });
-}));
-
 // GET /api/v1/products
 v1Routes.get('/products', h(async (req, res) => {
   await requireApiKey(req);
   /*
-   * Só a API do ERP recebe `categoryCode` — a vitrine não tem o que fazer com
-   * ele, e seria uma consulta a mais em cada carregamento da loja.
-   *
-   * E aqui os produtos sem categoria APARECEM, ao contrário da vitrine: são
-   * justamente os que o ERP precisa reenviar depois da amarração.
+   * Aqui os produtos sem categoria APARECEM, ao contrário da vitrine: quem
+   * integra precisa enxergar o cadastro incompleto para poder completá-lo.
    */
-  jsonOk(res, { products: await fetchProducts({ comCodigos: true }) });
+  jsonOk(res, { products: await fetchProducts() });
 }));
 
 // GET /api/v1/products/:id
@@ -245,94 +39,21 @@ v1Routes.get('/products/:id', h(async (req, res) => {
   await requireApiKey(req);
   const row = await q.one('SELECT * FROM products WHERE id = ?', [req.params.id]);
   if (row === null) fail('Produto não encontrado.', 404, 'not_found');
-  jsonOk(res, { product: productRowToApi(row, await mapaDeCodigos()) });
+  jsonOk(res, { product: productRowToApi(row) });
 }));
 
 /**
- * PUT /api/v1/products/:id — o ERP grava o produto (cria ou atualiza).
+ * PATCH /api/v1/products/:id/stock — a automação sincroniza o estoque.
  *
- * Aceita o MESMO formato que a leitura devolve, o que permite ao ERP ler um
- * item, mudar um campo e devolver o objeto. Só os campos presentes no corpo são
- * tocados: `{"price": 10}` muda o preço e não zera o resto.
- *
- * Responde 200 mesmo quando algum campo é recusado por estar travado no painel
- * — `applied` e `ignored` dizem o que aconteceu. Ver o comentário em
- * `erp-produtos.ts`: recusar a requisição inteira faria o ERP repetir para
- * sempre, e responder 200 mudo faria ele acreditar que aplicou.
- */
-v1Routes.put('/products/:id', h(async (req, res) => {
-  await requireApiKey(req);
-  const resultado = await gravarProdutoDoErp(String(req.params.id ?? ''), body(req));
-  if (!resultado.ok) {
-    fail(
-      resultado.error?.message ?? 'Não foi possível gravar o produto.',
-      422,
-      resultado.error?.code ?? 'invalid_product',
-    );
-  }
-  jsonOk(res, resultado, resultado.criado ? 201 : 200);
-}));
-
-/**
- * POST /api/v1/products/batch — vários produtos numa chamada.
- *
- * Com mais de mil itens no catálogo, uma requisição por produto transforma um
- * ciclo de sincronização em milhares de chamadas. Aqui vão até 200 por vez.
- *
- * Um item inválido NÃO derruba o lote: cada produto tem o seu resultado. Abortar
- * tudo por causa de um faria o ERP reenviar as gravações que já tinham dado
- * certo — e a repetição esconderia qual era o item ruim.
- */
-v1Routes.post('/products/batch', h(async (req, res) => {
-  await requireApiKey(req);
-  const b = body(req);
-  const lista = Array.isArray(b.products) ? b.products : null;
-  if (lista === null) fail('Envie {"products": [...]}.', 422, 'invalid_batch');
-  if (lista.length === 0) fail('A lista está vazia.', 422, 'invalid_batch');
-  if (lista.length > LOTE_MAXIMO) {
-    fail(`Máximo de ${LOTE_MAXIMO} produtos por chamada.`, 422, 'batch_too_large');
-  }
-
-  const resultados = [];
-  for (const bruto of lista) {
-    if (bruto === null || typeof bruto !== 'object' || Array.isArray(bruto)) {
-      resultados.push({
-        id: '', ok: false, criado: false, applied: [], ignored: [], warnings: [],
-        error: { code: 'invalid_product', message: 'Cada item precisa ser um objeto.' },
-      });
-      continue;
-    }
-    const dto = bruto as Record<string, unknown>;
-    resultados.push(await gravarProdutoDoErp(String(dto.id ?? ''), dto));
-  }
-
-  jsonOk(res, {
-    total: resultados.length,
-    gravados: resultados.filter((r) => r.ok).length,
-    falhas: resultados.filter((r) => !r.ok).length,
-    results: resultados,
-  });
-}));
-
-/**
- * Teto por chamada em lote: alto o bastante para um catálogo inteiro em poucas
- * chamadas, baixo o bastante para a requisição não estourar tempo nem memória.
- */
-const LOTE_MAXIMO = 200;
-
-/**
- * PATCH /api/v1/products/:id/stock — o ERP sincroniza o estoque.
- *
- * Atalho para o caminho de gravação acima, mantido porque já está em uso: o
- * valor é absoluto (saldo, não variação), o que torna a chamada idempotente.
- * Passa pela MESMA regra de travas — estoque ajustado à mão no painel não é
- * sobrescrito, e a resposta diz quando isso aconteceu.
+ * O valor é absoluto (saldo, não variação), e é isso que torna a chamada
+ * idempotente: repetir o mesmo envio depois de um timeout não soma nem subtrai
+ * nada. Só mexe no saldo — o resto do cadastro é do painel.
  */
 v1Routes.patch('/products/:id/stock', h(async (req, res) => {
   await requireApiKey(req);
   const id = String(req.params.id ?? '');
   /*
-   * Saldo pode ter fração — o ERP trabalha assim.
+   * Saldo pode ter fração — a loja vende por peso e por metro.
    *
    * Era lido com `bodyInt`, que trunca: mandar 7,5 gravava 7 e a resposta
    * confirmava "stock: 7" sem apontar nada de errado. Os dois sistemas
@@ -349,24 +70,20 @@ v1Routes.patch('/products/:id/stock', h(async (req, res) => {
     fail('Produto não encontrado.', 404, 'not_found');
   }
 
-  const r = await gravarProdutoDoErp(id, { stock });
+  // Três casas é o que a coluna guarda; mandar mais é arredondado aqui.
+  await q.run(
+    'UPDATE products SET stock = ? WHERE id = ?',
+    [Math.round(stock * 1000) / 1000, id],
+  );
 
   /*
    * A resposta devolve o saldo GRAVADO, lido do banco — não o que veio no
    * corpo. Ecoar o valor enviado seria confirmar uma gravação que pode não ter
-   * acontecido: com o estoque travado no painel, o pedido é ignorado de
-   * propósito (vem em `ignored`), e a resposta antiga dizia "stock: 7" com o
-   * banco em 12.
+   * acontecido exatamente como pedida: 7,5005 é gravado como 7,501, e a
+   * resposta precisa dizer o número que ficou lá.
    */
   const depois = await q.one('SELECT stock FROM products WHERE id = ?', [id]);
-  jsonOk(res, {
-    ok: true,
-    id,
-    stock: Number(depois?.stock ?? 0),
-    applied: r.applied,
-    ignored: r.ignored,
-    warnings: r.warnings,
-  });
+  jsonOk(res, { ok: true, id, stock: Number(depois?.stock ?? 0) });
 }));
 
 // GET /api/v1/orders?status=&since=
@@ -462,21 +179,21 @@ v1Routes.get('/orders/:id', h(async (req, res) => {
   jsonOk(res, { order: orderRowToApi(o, items) });
 }));
 
-// PATCH /api/v1/orders/:id — muda o status (ERP confirmando faturamento/envio)
+// PATCH /api/v1/orders/:id — muda o status (a automação confirma faturamento/envio)
 v1Routes.patch('/orders/:id', h(async (req, res) => {
   await requireApiKey(req);
   const status = bodyStr(body(req), 'status', '', 20);
   if (!STATUS_PEDIDO.includes(status)) fail('Status inválido.', 422, 'invalid_status');
 
   /*
-   * Quem mudou é "erp": quem chega por aqui está usando a chave de API.
+   * Quem mudou é "api": quem chega por aqui está usando a chave de API.
    *
-   * A mesma função do painel grava as datas de transição, para o pedido que o
-   * ERP marcou como enviado ter `shippedAt` igual ao que a lojista teria
+   * A mesma função do painel grava as datas de transição, para o pedido que a
+   * automação marcou como enviado ter `shippedAt` igual ao que a lojista teria
    * gravado pela tela. Um dos dois caminhos esquecer a data é um pedido que a
    * varredura seguinte não consegue explicar.
    */
-  const t = transicaoDeStatus(status, bodyStr(body(req), 'cancelReason', '', 200), 'erp');
+  const t = transicaoDeStatus(status, bodyStr(body(req), 'cancelReason', '', 200), 'api');
   if ((await q.run(
     `UPDATE orders SET ${t.sql} WHERE id = ?`,
     [...t.params, req.params.id],

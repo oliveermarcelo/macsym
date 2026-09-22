@@ -5,7 +5,6 @@
 
 import { decryptPayload } from './crypto.ts';
 import { placeholders, q, type Q, type Row } from './db.ts';
-import { codigoNoMapa, mapaDeCodigos } from './erp-categorias.ts';
 import { iso, round2 } from './http.ts';
 
 export interface StoreSettings {
@@ -66,8 +65,8 @@ export interface ShippingConfig {
    * própria cotação e este campo é ignorado. Sem eles, a loja cobra um preço
    * por estado ou faixa de CEP e não tem como saber por onde a encomenda vai —
    * é decisão de quem despacha. Este campo é o jeito de a lojista declarar
-   * isso, e vazio é uma resposta legítima: o ERP recebe null e usa o padrão
-   * dele, que é o que já acontece hoje.
+   * isso, e vazio é uma resposta legítima: quem lê o pedido pela API v1 recebe
+   * null e resolve pelo padrão dele, que é o que já acontece hoje.
    */
   defaultCarrier: string;
   [k: string]: unknown;
@@ -127,7 +126,7 @@ export const DEFAULT_RECOVERY: RecoveryConfig = {
 };
 
 export const INTEGRATION_IDS = [
-  'uno', 'erp', 'zapi', 'evolution', 'chatwoot', 'chatvolt',
+  'zapi', 'evolution', 'chatwoot', 'chatvolt',
   'mercadopago', 'pagseguro', 'stripe', 'pagarme',
   'correios', 'melhorenvio', 'frenet',
 ] as const;
@@ -242,18 +241,12 @@ export async function publicSettings(exec: Q = q): Promise<Record<string, unknow
 /**
  * Converte uma linha de `products` no objeto Product do front-end.
  *
- * `codigos` é o mapa destino-da-loja → código do ERP (ver erp-categorias.ts).
- * Vem de fora porque a conversão é síncrona e roda por produto: buscar o
- * código de cada um daria uma consulta por item numa listagem de 1.400.
- * Ausente, a resposta simplesmente não traz `categoryCode` — é o caso da
- * vitrine, que não tem o que fazer com ele.
- *
- * `galeria` chega pelo mesmo motivo: as fotos extras moram em outra tabela, e
- * buscá-las produto a produto daria uma consulta por item.
+ * `galeria` chega de fora porque a conversão é síncrona e roda por produto: as
+ * fotos extras moram em outra tabela, e buscá-las produto a produto daria uma
+ * consulta por item numa listagem de 1.400.
  */
 export function productRowToApi(
   r: Row,
-  codigos?: Map<string, string>,
   galeria?: string[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {
@@ -269,8 +262,9 @@ export function productRowToApi(
      *
      * JSON não distingue inteiro de decimal — `7` e `7.0` são o mesmo número
      * para qualquer parser. O que muda é o que a loja aceita GUARDAR: até aqui
-     * ela recusava fração, e o saldo 7,5 do ERP virava 7 ou virava erro. Agora
-     * o valor atravessa inteiro nos dois sentidos.
+     * ela recusava fração, e o saldo 7,5 de quem vende por peso ou por metro
+     * virava 7 ou virava erro. Agora o valor atravessa inteiro nos dois
+     * sentidos.
      */
     stock: Number(r.stock) || 0,
     image: r.image,
@@ -282,8 +276,8 @@ export function productRowToApi(
      * incompatíveis no mesmo campo. Ninguém consegue ler "0,2kg" como número, e
      * o frete tinha que adivinhar o valor no meio da frase.
      *
-     * A unidade é quilo porque é a unidade dos Correios, do Melhor Envio e do
-     * ERP. O rótulo continua existindo, com nome próprio: `weightLabel`.
+     * A unidade é quilo porque é a unidade dos Correios e do Melhor Envio. O
+     * rótulo continua existindo, com nome próprio: `weightLabel`.
      */
     weight: Number(r.weight_kg) || 0,
     weightLabel: String(r.weight ?? ''),
@@ -295,28 +289,6 @@ export function productRowToApi(
   if (r.tag) out.tag = r.tag;
   if (r.ingredients) out.ingredients = r.ingredients;
   if (r.highlight) out.highlight = true;
-  /*
-   * Campos travados contra o ERP (ver erp-produtos.ts). Só aparece quando há
-   * algum: um array vazio em cada um dos 1.400 produtos seria ruído em toda
-   * resposta da vitrine.
-   *
-   * Serve ao ERP também — ele consulta antes de enviar e descobre, sem
-   * tentativa e erro, que aquele preço não vai ser aceito.
-   */
-  const travados = String(r.locked_fields ?? '').split(',').filter((x) => x !== '');
-  if (travados.length > 0) out.lockedFields = travados;
-
-  /*
-   * Código da categoria no ERP, quando a amarração existe.
-   *
-   * `null` explícito, e não campo ausente, quando a categoria do produto não
-   * está amarrada a nenhum código: para o ERP, "não sei traduzir" e "esqueci de
-   * mandar o campo" precisam ser distinguíveis.
-   */
-  if (codigos !== undefined) {
-    out.categoryCode = codigoNoMapa(codigos, r.category, r.subcategory);
-  }
-
   /*
    * Fotos extras, sem a capa.
    *
@@ -362,31 +334,27 @@ export async function galeriasDe(
 }
 
 export interface OpcoesDeCatalogo {
-  /** Só os ativos. A vitrine e o ERP querem; o painel, não. */
+  /** Só os ativos. A vitrine quer; o painel, não. */
   onlyActive?: boolean;
   /**
    * Esconder produto sem categoria.
    *
-   * Vale só para a VITRINE, e é o que torna verdadeira a promessa feita ao ERP:
-   * produto que chega com um código de categoria ainda não amarrado "fica fora
-   * da vitrine até alguém amarrar". Sem este filtro ele sumia dos menus (não
-   * pertence a seção nenhuma) mas continuava listado e comprável na home — o
-   * pior dos dois mundos, porque some para quem procura e aparece para quem
-   * não deveria.
+   * Vale só para a VITRINE. Sem este filtro, o produto sem categoria sumia dos
+   * menus (não pertence a seção nenhuma) mas continuava listado e comprável na
+   * home — o pior dos dois mundos, porque some para quem procura e aparece
+   * para quem não deveria.
    *
-   * O painel e a API do ERP continuam vendo esses produtos: quem precisa
-   * resolver a pendência precisa enxergá-la.
+   * O painel continua vendo esses produtos: quem precisa escolher a categoria
+   * que falta precisa enxergá-los.
    */
   exigirCategoria?: boolean;
-  /** Anexar `categoryCode` a cada produto. Só a API do ERP usa. */
-  comCodigos?: boolean;
   exec?: Q;
 }
 
 export async function fetchProducts(
   opcoes: OpcoesDeCatalogo = {},
 ): Promise<Record<string, unknown>[]> {
-  const { onlyActive = true, exigirCategoria = false, comCodigos = false, exec = q } = opcoes;
+  const { onlyActive = true, exigirCategoria = false, exec = q } = opcoes;
 
   const filtros: string[] = [];
   if (onlyActive) filtros.push('active = 1');
@@ -394,10 +362,9 @@ export async function fetchProducts(
   const where = filtros.length > 0 ? ` WHERE ${filtros.join(' AND ')}` : '';
 
   // Uma consulta para o catálogo inteiro, não uma por produto.
-  const codigos = comCodigos ? await mapaDeCodigos(exec) : undefined;
   const linhas = await exec.all(`SELECT * FROM products${where} ORDER BY position ASC, name ASC`);
   const galerias = await galeriasDe(linhas.map((r) => String(r.id)), exec);
-  return linhas.map((r) => productRowToApi(r, codigos, galerias.get(String(r.id))));
+  return linhas.map((r) => productRowToApi(r, galerias.get(String(r.id))));
 }
 
 // ---------------------------------------------------------- Categorias ----
@@ -405,14 +372,15 @@ export async function fetchProducts(
 /**
  * Monta a árvore de navegação da loja a partir das linhas de categoria.
  *
- * O ERP manda categorias soltas — "Pirâmides de Cristal", "de Madeira", "de
- * Impressão 3D", todas no mesmo nível. A loja agrupa por cima disso: uma
- * categoria pode apontar para outra como sua CATEGORIA GERAL, e então some do
- * topo e passa a aparecer dentro dela.
+ * O catálogo tem categorias irmãs demais no mesmo nível — "Pirâmides de
+ * Cristal", "de Madeira", "de Impressão 3D" —, e nenhuma "Pirâmides" para o
+ * cliente clicar. A loja agrupa por cima disso: uma categoria pode apontar
+ * para outra como sua CATEGORIA GERAL, e então some do topo e passa a aparecer
+ * dentro dela.
  *
  * O ponto que faz isso ser barato: agrupar não move produto nenhum. Cada
- * produto continua apontando para a categoria do ERP em que o ERP o colocou, e
- * é só a navegação que soma os filhos. Por isso os filhos saem marcados com
+ * produto continua apontando para a categoria em que foi cadastrado, e é só a
+ * navegação que soma os filhos. Por isso os filhos saem marcados com
  * `isCategory`: a vitrine precisa saber que, para aquele item, filtrar é
  * comparar com `product.category` e não com `product.subcategory`.
  *
@@ -509,7 +477,8 @@ const vazioOuNulo = (v: unknown): string | null => {
  * Página de rastreio dos Correios para um código, ou null.
  *
  * Montada aqui porque o pedido guarda só o código, e quem recebe o pedido —
- * o ERP, e a lojista pela conta do cliente — precisa do endereço para abrir.
+ * a lojista, o cliente na conta dele e quem lê a API v1 — precisa do endereço
+ * para abrir.
  * Só para o padrão dos Correios (AA123456789BR): inventar a URL de outra
  * transportadora a partir de um código que não é dela mandaria a pessoa para
  * uma página de erro.
@@ -544,8 +513,8 @@ export function documentoDoCliente(bruto: unknown): {
  *
  * `status` é uma esteira linear: pending → paid → shipped → delivered. Quando
  * o pedido avança para "shipped", a informação "foi pago" DESAPARECE do campo,
- * e não há como reconstruí-la — o ERP precisa checar o pagamento antes de
- * qualquer coisa. Os eixos são gravados em colunas próprias, mas quando elas
+ * e não há como reconstruí-la — e conferir o pagamento é a primeira coisa que
+ * qualquer conciliação faz. Os eixos são gravados em colunas próprias, mas quando elas
  * ainda não foram preenchidas (pedido anterior a esta mudança) são deduzidos
  * do que existe, para nenhum pedido antigo sair sem os campos novos.
  */
@@ -582,16 +551,17 @@ export function eixosDoPedido(r: Row): { paymentStatus: string; fulfillmentStatu
  *
  * `COALESCE` em todas as datas: marcar "enviado" duas vezes não pode reescrever
  * a data do primeiro envio. E `updated_at` é tocado sempre, porque é por ele
- * que a varredura do ERP encontra o pedido que mudou.
+ * que a varredura periódica de quem consome a API v1 (`?updatedSince=`)
+ * encontra o pedido que mudou.
  *
  * Existe aqui, e não dentro de cada rota, porque são TRÊS lugares que mudam
- * status — painel, ERP pela API v1 e o retorno do gateway — e um deles
- * esquecer de gravar a data é um pedido que o ERP nunca mais vê.
+ * status — painel, API v1 e o retorno do gateway — e um deles esquecer de
+ * gravar a data é um pedido que a varredura seguinte nunca mais vê.
  */
 export function transicaoDeStatus(
   status: string,
   motivo: string,
-  quem: 'customer' | 'store' | 'gateway' | 'erp',
+  quem: 'customer' | 'store' | 'gateway' | 'api',
 ): { sql: string; params: unknown[] } {
   const campos = ['status = ?', 'updated_at = NOW()'];
   const params: unknown[] = [status];
@@ -635,13 +605,13 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
     customerEmail: r.customer_email,
     customerPhone: r.customer_phone,
     /*
-     * CPF do comprador — liberado a pedido do dono da loja, para o ERP emitir
+     * CPF do comprador — liberado a pedido do dono da loja, para quem emite a
      * NF-e ao consumidor.
      *
      * É dado pessoal, e isso tem consequência prática: a chave da API v1 passa a
      * dar acesso a CPF de cliente. Quem tiver a chave tem os CPFs. Portanto ela
-     * pertence ao cofre do ERP, não a um arquivo de configuração compartilhado,
-     * e o corpo destas respostas não deve ir para log.
+     * pertence ao cofre de quem integra, não a um arquivo de configuração
+     * compartilhado, e o corpo destas respostas não deve ir para log.
      */
     customerCpf: String(r.customer_cpf ?? ''),
     /*
@@ -649,7 +619,7 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
      *
      * `customerCpf` sai como o comprador digitou — com pontos e traço — e
      * continua existindo porque já é consumido. Mas número formatado não é
-     * número: o ERP precisava limpar a string antes de faturar, e uma máscara
+     * número: quem fatura precisava limpar a string antes, e uma máscara
      * diferente (ou nenhuma) quebrava a limpeza. `customerDocument` é só
      * dígito, e `customerDocumentType` diz o que aqueles dígitos são — 11 e
      * 14 dígitos vão para lugares diferentes na NF-e.
@@ -668,10 +638,10 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
       return {
         productId: i.product_id,
         /*
-         * SKU explícito. Hoje é igual ao productId porque todo produto nasce
-         * no ERP, mas isso é convenção e não contrato: o ERP casa produto por
-         * SKU, e no dia em que um produto nascer no painel da loja o id deixa
-         * de ser um código de produto.
+         * SKU explícito. Hoje é igual ao productId porque o catálogo veio de
+         * uma importação, mas isso é convenção e não contrato: quem integra
+         * casa produto por SKU, e um produto cadastrado à mão no painel ganha
+         * um id que não é código de produto nenhum.
          */
         sku: String(i.sku ?? '') || String(i.product_id ?? ''),
         name: i.name,
@@ -681,7 +651,8 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
         /*
          * Total da linha já gravado.
          *
-         * Serve para o ERP conferir o arredondamento contra o subtotal. Os
+         * Serve para quem lê o pedido conferir o arredondamento contra o
+         * subtotal. Os
          * pedidos antigos não têm a coluna preenchida; nesses, recalcula, que
          * é o mesmo número — o valor gravado só passa a divergir se algum dia
          * existir desconto por item, e é justamente aí que ele importa.
@@ -700,8 +671,8 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
     payment: r.payment,
     channel: r.channel,
     /*
-     * ENDEREÇO E TRANSPORTADORA — sem estes campos o ERP não emite nota nem
-     * etiqueta, e a integração para no primeiro pedido.
+     * ENDEREÇO E TRANSPORTADORA — sem estes campos não se emite nota nem
+     * etiqueta, e qualquer automação de expedição para no primeiro pedido.
      *
      * O nome é `shippingAddress`, e não `shipping`: `shipping` já existe nesta
      * resposta como o VALOR do frete, e trocar o tipo de um campo publicado
@@ -719,20 +690,21 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
       state: String(r.ship_state ?? ''),
       /*
        * Quem recebe, e em que telefone. Vazio cai para o comprador: é o caso
-       * normal, e repetir o dado é melhor do que o ERP ter de adivinhar de
+       * normal, e repetir o dado é melhor do que quem lê ter de adivinhar de
        * onde tirar o destinatário numa entrega para terceiro.
        */
       recipientName: vazioOuNulo(r.ship_recipient) ?? String(r.customer_name ?? ''),
       phone: vazioOuNulo(r.ship_phone) ?? vazioOuNulo(r.customer_phone),
-      /** O país que o ERP hoje precisa chutar como "BRASIL". */
+      /** O país que, sem este campo, quem fatura precisa chutar como "BRASIL". */
       country: String(r.ship_country ?? 'BR') || 'BR',
       /*
        * Código IBGE do município: null porque a loja NÃO o coleta.
        *
-       * O campo existe no contrato para o ERP não precisar mudar quando ele
-       * passar a vir. Mandar um código deduzido por nome + UF seria pior do
-       * que não mandar: o ERP já resolve o município assim, e um palpite
-       * nosso apenas moveria o erro de homônimo para dentro da NF-e.
+       * O campo existe no contrato para quem consome não precisar mudar
+       * quando ele passar a vir. Mandar um código deduzido por nome + UF seria
+       * pior do que não mandar: o outro lado já resolve o município assim, e
+       * um palpite nosso apenas moveria o erro de homônimo para dentro da
+       * NF-e.
        */
       cityIbgeCode: null,
     },
@@ -741,20 +713,20 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
      *
      * A loja é B2C e não coleta endereço de cobrança separado — o cartão é
      * processado pelo Mercado Pago, que guarda o dele. Null diz exatamente
-     * isso, e o ERP pode clonar o de entrega com segurança; um objeto
-     * repetido faria o ERP marcar indEnderecoUnico = "0" e montar três
+     * isso, e quem fatura pode clonar o de entrega com segurança; um objeto
+     * repetido faria a emissão marcar indEnderecoUnico = "0" e montar três
      * endereços iguais para um pedido que tem um só.
      */
     billingAddress: null,
     /**
      * "Jadlog · .Package — até 5 dias úteis": o que o cliente escolheu pagar.
      *
-     * Mantido porque é o texto que a lojista lê. Para o ERP, use os campos
+     * Mantido porque é o texto que a lojista lê. Para integrar, use os campos
      * separados abaixo: casar transportadora por esta string nunca funciona,
-     * e o pedido acaba sempre na transportadora padrão do sistema.
+     * e o pedido acaba sempre na transportadora padrão do outro sistema.
      */
     shippingService: String(r.shipping_service ?? ''),
-    /** Transportadora, limpa: "Correios", "Jadlog". É por aqui que o ERP casa. */
+    /** Transportadora, limpa: "Correios", "Jadlog". É por aqui que se casa. */
     shippingCarrier: vazioOuNulo(r.shipping_carrier),
     /** Código do serviço: "PAC", "SEDEX", ".Package". */
     shippingServiceCode: vazioOuNulo(r.shipping_service_code),
@@ -766,8 +738,8 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
      *
      * Hoje os dois são iguais e é isso que sai. Null significa "a loja não
      * apurou", e não "zero": se algum dia a loja subsidiar frete — frete
-     * grátis acima de um valor já é um subsídio —, a margem do pedido no ERP
-     * sairia errada sem este campo.
+     * grátis acima de um valor já é um subsídio —, a margem apurada a partir
+     * do pedido sairia errada sem este campo.
      */
     shippingCostOwner: r.shipping_cost_owner === null || r.shipping_cost_owner === undefined
       ? Number(r.shipping_cost) || 0
@@ -789,14 +761,14 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
      * É o fato que separa "pedido que pode sumir" de "registro de pagamento".
      * `status` não serve para isso: é editável na tela, então um pedido pago
      * marcado como cancelado continuaria parecendo descartável. Vai também na
-     * API v1 — o ERP precisa da data do pagamento para a nota.
+     * API v1 — a data do pagamento é o que a nota exige.
      */
     paidAt: r.paid_at ? iso(r.paid_at) : null,
     /*
      * As demais datas de transição, e a de atualização.
      *
-     * Sem `updatedAt`, a varredura periódica do ERP — que o manual descreve
-     * como o recurso obrigatório para quando o webhook falha — só enxergava
+     * Sem `updatedAt`, a varredura periódica de quem integra — o recurso que
+     * cobre o webhook perdido — só enxergava
      * pedido NOVO, porque o filtro comparava com a data de CRIAÇÃO. Um pedido
      * feito ontem e pago hoje, cujo aviso se perdeu, ficava parado sem ninguém
      * notar. É o pior defeito possível numa integração de pedido, e ele estava
@@ -812,7 +784,7 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
      * `status` continua sendo a esteira que a lojista vê e edita. Estes dizem
      * o que ela não consegue dizer: um pedido "shipped" não informa mais se
      * foi pago, e "canceled" não distingue pagamento recusado de desistência
-     * — coisas que geram lançamentos diferentes no ERP.
+     * — coisas que viram lançamentos diferentes na contabilidade.
      */
     ...eixosDoPedido(r),
     cancelReason: vazioOuNulo(r.cancel_reason),
@@ -847,8 +819,8 @@ export function orderRowToApi(r: Row, items: Row[]): Record<string, unknown> {
      * Desconto repartido pela origem.
      *
      * `discount` continua sendo o total. Cupom e desconto de meio de pagamento
-     * viram lançamentos diferentes no ERP, e a partir de um número só não há
-     * como separá-los.
+     * viram lançamentos diferentes na contabilidade, e a partir de um número só
+     * não há como separá-los.
      */
     discountCoupon: Number(r.discount_coupon) || 0,
     discountPayment: Number(r.discount_payment) || 0,

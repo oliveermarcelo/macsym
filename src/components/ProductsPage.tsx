@@ -29,14 +29,15 @@ const isNew = (p: Product) => p.tag === 'NOVIDADE';
 /**
  * O produto pertence a esta categoria?
  *
- * `membros` são as categorias agrupadas DENTRO desta. O ERP manda "Pirâmides
- * de Cristal", "de Madeira" e "de Impressão 3D" soltas; a loja as pendura numa
- * categoria geral "Pirâmides", e nenhum produto se move — cada um continua
- * apontando para a categoria do ERP. Então, para a categoria geral, pertencer é
- * estar em QUALQUER uma das filhas.
+ * `membros` são as categorias agrupadas DENTRO desta. O catálogo tem
+ * "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D" soltas; o painel as
+ * pendura numa categoria geral "Pirâmides", e nenhum produto se move — cada um
+ * continua apontando para a categoria em que foi cadastrado. Então, para a
+ * categoria geral, pertencer é estar em QUALQUER uma das filhas.
  *
  * Sem isso, clicar em "Pirâmides" mostraria zero produtos: nenhum produto tem
- * essa categoria, porque ela é da loja e não do ERP.
+ * essa categoria, porque ela é um agrupamento e não uma categoria do
+ * catálogo.
  */
 function matchesCategory(p: Product, categoryId: string, membros: string[] = []): boolean {
   if (categoryId === 'all') return true;

@@ -164,9 +164,10 @@ export default function ShippingAdmin() {
 
             Com Correios ou Melhor Envio ligados, a transportadora do pedido vem
             da própria cotação e este campo é ignorado. Sem eles, a loja sabe o
-            PREÇO mas não sabe por onde a encomenda vai — e o ERP precisa do
-            nome para achar a transportadora no cadastro dele. Vazio é resposta
-            legítima: o ERP usa o padrão dele, como já faz hoje.
+            PREÇO mas não sabe por onde a encomenda vai — e quem despacha
+            precisa do nome para achar a transportadora no cadastro dele. Vazio
+            é resposta legítima: o outro lado usa o padrão dele, como já faz
+            hoje.
           */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1.5">
@@ -181,8 +182,8 @@ export default function ShippingAdmin() {
               className={inputCls}
             />
             <p className="text-[11px] text-gray-400 mt-1">
-              Quem entrega quando o frete sai desta tabela. Vai no pedido para o ERP achar a
-              transportadora no cadastro dele. Se os Correios estiverem ligados em Integrações,
+              Quem entrega quando o frete sai desta tabela. Vai no pedido para quem despacha achar
+              a transportadora no cadastro dele. Se os Correios estiverem ligados em Integrações,
               a transportadora vem da cotação e este campo não é usado.
             </p>
           </div>

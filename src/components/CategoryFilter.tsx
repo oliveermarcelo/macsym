@@ -22,8 +22,8 @@ export default function CategoryFilter({ setActiveCategory }: CategoryFilterProp
    *
    * Aqui havia seis cartões cravados no código — id, nome, frase e foto fixos.
    * Enquanto a loja tinha exatamente aquelas seis categorias, funcionava.
-   * Quando ela passou a espelhar a árvore do ERP, os ids deixaram de existir:
-   * os cartões continuavam bonitos na home e levavam a uma lista vazia.
+   * Quando o catálogo real entrou, esses ids deixaram de existir: os cartões
+   * continuavam bonitos na home e levavam a uma lista vazia.
    *
    * `featured` fica de fora porque é entrada de menu (Promoções, Novidades) e
    * não categoria de catálogo.

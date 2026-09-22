@@ -6,7 +6,7 @@
  *
  * Aqui ficam nome, descrição e quais campos cada provedor pede. O teste de
  * conexão e o envio de mensagens moveram-se para o servidor
- * (`server/src/providers.ts`): antes o navegador chamava Z-API, Stripe e ERP
+ * (`server/src/providers.ts`): antes o navegador chamava Z-API e Stripe
  * diretamente, o que exigia ter o token no JavaScript e ainda esbarrava em
  * CORS. Agora o painel só pede "teste a Z-API" e o servidor usa a credencial
  * cifrada guardada no banco.
@@ -22,7 +22,7 @@ export interface FieldDef {
   help?: string;
 }
 
-export type ProviderCategory = 'payment' | 'logistics' | 'erp' | 'whatsapp' | 'chat';
+export type ProviderCategory = 'payment' | 'logistics' | 'whatsapp' | 'chat';
 
 export interface ProviderMeta {
   id: IntegrationId;
@@ -170,42 +170,6 @@ export const PROVIDERS: ProviderMeta[] = [
     docsUrl: 'https://painel.frenet.com.br',
     fields: [
       { key: 'token', label: 'Token Frenet', type: 'password' },
-    ],
-  },
-
-  /*
-   * UNO ERP — card sem credencial, de propósito.
-   *
-   * Ele pedia "Token de integração UNO" e "Código da empresa/filial", e
-   * nenhuma linha da loja lia qualquer um dos dois. Um campo de senha que não
-   * é usado por nada é pior que um campo a menos: convida a colar ali um token
-   * de verdade, que fica guardado sem motivo e amplia o estrago de um vazamento
-   * sem trazer benefício nenhum.
-   *
-   * A integração acontece na direção contrária: é o UNO que chama a loja, com
-   * uma chave `qp_live_` gerada em Chaves de API. Por isso o botão de testar
-   * aqui só informa se alguma requisição do UNO chegou — e o teste que vale a
-   * pena está na própria chave.
-   */
-  {
-    id: 'uno',
-    name: 'UNO ERP',
-    category: 'erp',
-    native: true,
-    description:
-      'O UNO consome a API da loja com uma chave de API — não há credencial do UNO para guardar '
-      + 'aqui. Testar mostra se alguma requisição do UNO já chegou.',
-    fields: [],
-  },
-  {
-    id: 'erp',
-    name: 'Outro ERP',
-    category: 'erp',
-    description: 'Conecte qualquer outro ERP via API REST (URL base + token).',
-    fields: [
-      { key: 'baseUrl', label: 'URL base da API', type: 'url', placeholder: 'https://erp.suaempresa.com/api' },
-      { key: 'token', label: 'Token de acesso', type: 'password' },
-      { key: 'company', label: 'Código da empresa/filial', placeholder: '001' },
     ],
   },
   {

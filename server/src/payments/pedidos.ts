@@ -146,8 +146,8 @@ export async function aplicarPagamento(opts: {
        * Recusa do gateway é um cancelamento com causa conhecida.
        *
        * Registrar quem cancelou e por quê separa isto de uma desistência do
-       * cliente — no ERP, as duas viram lançamentos diferentes, e a partir de
-       * `status = "canceled"` sozinho não há como distinguir.
+       * cliente — na contabilidade, as duas viram lançamentos diferentes, e a
+       * partir de `status = "canceled"` sozinho não há como distinguir.
        */
       await tx.run(
         `UPDATE orders

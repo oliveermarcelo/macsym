@@ -202,9 +202,10 @@ ok(JSON.stringify(reordenado.json?.product?.images) === JSON.stringify([u2, u1])
 /*
  * Salvar SEM o campo `images` não apaga a galeria.
  *
- * É o caso do ERP: ele grava produto pela API v1 e não conhece galeria. Se a
- * ausência do campo fosse lida como lista vazia, o primeiro ciclo de
- * sincronização apagaria as fotos que alguém subiu à mão.
+ * É o caso de quem grava produto por fora — a carga do catálogo, uma
+ * automação pela API — e não conhece galeria. Se a ausência do campo fosse
+ * lida como lista vazia, a primeira gravação dessas apagaria as fotos que
+ * alguém subiu à mão.
  */
 await painel.chamar('POST', '/api/admin/products', {
   id, name: 'Produto com galeria', price: 111, category: 'piramides', image: enviada.json.url,

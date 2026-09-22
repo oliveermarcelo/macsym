@@ -13,7 +13,7 @@ export interface Product {
   longDescription?: string;
   price: number;
   oldPrice?: number; // original price when on sale (renders strikethrough + % off)
-  /** Saldo em estoque. Pode ter fração: o ERP trabalha o saldo assim. */
+  /** Saldo em estoque. Pode ter fração: a loja vende por peso e por metro. */
   stock?: number;
   image: string;
   highlight?: boolean;
@@ -22,8 +22,8 @@ export interface Product {
    * Peso da peça em QUILOS — é o que a cotação de frete usa.
    *
    * Era texto livre fazendo dois papéis ao mesmo tempo: rótulo na vitrine e
-   * peso para o frete. Como texto, ninguém lia "0,2kg" como número — nem o
-   * ERP, nem o próprio cálculo de frete, que garimpava o valor no meio da
+   * peso para o frete. Como texto, ninguém lia "0,2kg" como número — nem quem
+   * integra, nem o próprio cálculo de frete, que garimpava o valor no meio da
    * frase. O rótulo passou a ser `weightLabel`.
    */
   weight: number;
@@ -64,9 +64,10 @@ export interface SubCategory {
    * Verdadeiro quando este item do segundo nível é, ele próprio, uma
    * CATEGORIA agrupada — e não uma subcategoria.
    *
-   * O ERP manda categorias soltas ("Pirâmides de Cristal", "de Madeira"); a
-   * loja as pendura numa categoria geral sem mover produto nenhum. Filtrar por
-   * uma delas é comparar com `product.category`, e não com `product.subcategory`.
+   * O catálogo tem categorias soltas ("Pirâmides de Cristal", "de Madeira"); o
+   * painel as pendura numa categoria geral sem mover produto nenhum. Filtrar
+   * por uma delas é comparar com `product.category`, e não com
+   * `product.subcategory`.
    */
   isCategory?: boolean;
 }
@@ -80,14 +81,14 @@ export interface MenuCategory {
    * Vitrine da categoria, editada em Painel → Vitrine das Categorias.
    *
    * `home` decide quem aparece na seção "Explore por categoria". Ela era seis
-   * cartões cravados no código, com ids que deixaram de existir quando a loja
-   * passou a espelhar a árvore do ERP — os cartões levavam a uma lista vazia.
+   * cartões cravados no código, com ids que deixaram de existir quando o
+   * catálogo de verdade entrou — os cartões levavam a uma lista vazia.
    */
   image?: string;
   blurb?: string;
   home?: boolean;
   position?: number;
-  /** Criada no painel (categoria geral), e não vinda do ERP. */
+  /** Criada no painel (categoria geral), e não vinda da carga do catálogo. */
   manual?: boolean;
   /** Categoria geral em que esta está pendurada, ou null. */
   groupId?: string | null;

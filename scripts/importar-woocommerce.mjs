@@ -16,8 +16,7 @@
  *
  * O que este script NÃO traz, porque a Store API não expõe: estoque numérico
  * (só "em estoque"/"esgotado"), custo, e os atributos que o tema não publica.
- * Depois da carga, quem manda é o painel — ou o UNO ERP, se a integração for
- * ligada.
+ * Depois da carga, quem manda é o painel.
  */
 
 import { writeFileSync } from 'node:fs';

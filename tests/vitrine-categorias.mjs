@@ -1,20 +1,20 @@
 /**
- * A vitrine das categorias: foto, frase e quem aparece na home.
+ * A vitrine das categorias: foto, frase, quem aparece na home e o agrupamento.
  *
  * Três coisas precisam ficar verdadeiras, e as três falhavam em silêncio:
  *
  *   1. a home mostra as categorias DE VERDADE. Antes eram seis cartões
- *      cravados no código; depois que a loja passou a espelhar a árvore do
- *      ERP, os ids deixaram de existir e os cartões levavam a uma lista vazia
- *      — bonitos e quebrados ao mesmo tempo;
+ *      cravados no código; quando o catálogo de verdade entrou, os ids
+ *      deixaram de existir e os cartões levavam a uma lista vazia — bonitos e
+ *      quebrados ao mesmo tempo;
  *
- *   2. só aparece quem foi marcado. O ERP manda dezenas de categorias, e
+ *   2. só aparece quem foi marcado. O catálogo tem dezenas de categorias, e
  *      mostrar todas viraria uma parede de cartões;
  *
- *   3. ESPELHAR AS CATEGORIAS DO ERP NÃO PODE APAGAR AS FOTOS. O espelhamento
- *      apaga e recria as categorias, e o ERP não conhece foto nenhuma. Sem
- *      cuidado, cada sincronização apagaria o trabalho de quem subiu as
- *      imagens à mão — e só se descobriria olhando a home depois.
+ *   3. AGRUPAR NÃO MOVE PRODUTO. A categoria geral é da loja e não existe no
+ *      catálogo; o produto continua na categoria em que foi cadastrado, e é a
+ *      navegação que soma os filhos. Se isso deixar de valer, clicar na
+ *      categoria geral passa a mostrar uma lista vazia.
  *
  *   npm run teste:vitrine
  */
@@ -115,64 +115,13 @@ const inexistente = await painel.chamar('PATCH', '/api/admin/categories/nao-exis
 });
 ok(inexistente.status === 404, 'categoria inexistente responde 404', String(inexistente.status));
 
-// -------------------------------- espelhar o ERP NÃO pode apagar as fotos ----
-
-/*
- * O cenário que custa caro: alguém sobe as fotos, o ERP sincroniza, e as fotos
- * somem. O espelhamento apaga e recria as categorias — a vitrine é preservada
- * por SLUG, que é derivado do nome.
- */
-const codigo = `VIT${String(marca).slice(-6)}`;
-const nomeNoErp = `Categoria Espelhada ${marca}`;
-const slugEsperado = nomeNoErp.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-const chave = await painel.chamar('POST', '/api/admin/api-keys', { name: `vitrine-${marca}` });
-const TOKEN = chave.json?.token ?? '';
-const erp = async (metodo, caminho, corpo) => {
-  const res = await fetch(BASE + caminho, {
-    method: metodo,
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${TOKEN}`,
-      ...(corpo === undefined ? {} : { 'Content-Type': 'application/json' }),
-    },
-    body: corpo === undefined ? undefined : JSON.stringify(corpo),
-  });
-  return { status: res.status, json: await res.json().catch(() => null) };
-};
-
-// O ERP conhece a categoria, e a loja espelha uma primeira vez.
-await erp('PUT', '/api/v1/categories', {
-  categories: [{ code: codigo, name: nomeNoErp, active: true }],
-});
-await painel.chamar('POST', '/api/admin/erp-categories/espelhar', { confirmar: true });
-
-// Alguém sobe a foto pela tela.
-const gravou = await painel.chamar('PATCH', `/api/admin/categories/${slugEsperado}`, {
-  image: '/midia/aaaabbbbccccddddeeeeffff.png',
-  blurb: 'Foto subida à mão',
-  home: true,
-});
-ok(gravou.status === 200, 'a foto é gravada na categoria espelhada', String(gravou.status));
-
-// E o ERP sincroniza de novo.
-await painel.chamar('POST', '/api/admin/erp-categories/espelhar', { confirmar: true });
-
-const sobreviveu = doMenu.call(null, await menuPublico())
-  ?? (await menuPublico()).find((c) => c.id === slugEsperado);
-ok(sobreviveu?.image === '/midia/aaaabbbbccccddddeeeeffff.png',
-  'espelhar o ERP de novo NÃO apaga a foto — é o que custaria o trabalho de quem cadastrou',
-  String(sobreviveu?.image));
-ok(sobreviveu?.blurb === 'Foto subida à mão', 'nem a frase', String(sobreviveu?.blurb));
-ok(sobreviveu?.home === true, 'nem a marcação da home');
-
 // ------------------------------------------------- agrupar categorias ----
 
 /*
- * O problema real: o ERP manda "Pirâmides de Cristal", "de Madeira" e "de
+ * O problema real: o catálogo traz "Pirâmides de Cristal", "de Madeira" e "de
  * Impressão 3D" como categorias SOLTAS, no mesmo nível. Não existe uma
- * "Pirâmides" para o cliente clicar, e não vai existir enquanto o ERP não
- * mandar a hierarquia. A loja cria a sua e pendura as do ERP dentro.
+ * "Pirâmides" para o cliente clicar. A loja cria a sua e pendura as outras
+ * dentro.
  */
 const filhas = [`grp-a-${marca}`, `grp-b-${marca}`];
 for (const [i, id] of filhas.entries()) {
@@ -216,7 +165,7 @@ ok(dentro.every((s) => s.isCategory === true),
 const catalogo = await (await fetch(BASE + '/api/catalog')).json();
 const doGrupo = (catalogo.products ?? []).filter((p) => filhas.includes(p.category));
 ok(doGrupo.length === 2,
-  'os produtos continuam apontando para a categoria do ERP, não para o grupo',
+  'os produtos continuam apontando para a categoria em que foram cadastrados, não para o grupo',
   String(doGrupo.length));
 
 // ------------------------------------------------ o que o servidor recusa ----
@@ -240,18 +189,10 @@ ok(grupoComMembros.status === 422,
   'e quem já agrupa outras não vira membro, senão os filhos sumiriam',
   String(grupoComMembros.status));
 
-const apagarDoErp = await painel.chamar('DELETE', `/api/admin/categories/${filhas[0]}`);
-ok(apagarDoErp.status === 409,
-  'categoria do ERP não é apagada aqui — voltaria na próxima sincronização',
-  String(apagarDoErp.status));
-
-// ------------------------- espelhar não pode desmontar o que foi agrupado ----
-
-await painel.chamar('POST', '/api/admin/erp-categories/espelhar', { confirmar: true });
-const depoisDeEspelhar = await menuPublico();
-ok(depoisDeEspelhar.some((c) => c.id === idGrupo),
-  'a categoria geral SOBREVIVE ao espelhamento — o ERP não a conhece e a apagaria',
-  JSON.stringify(depoisDeEspelhar.map((c) => c.id).slice(0, 5)));
+const apagarDoCatalogo = await painel.chamar('DELETE', `/api/admin/categories/${filhas[0]}`);
+ok(apagarDoCatalogo.status === 409,
+  'categoria vinda da carga do catálogo não é apagada aqui — voltaria na próxima carga',
+  String(apagarDoCatalogo.status));
 
 // --------------------------------------------- apagar a categoria geral ----
 
@@ -267,9 +208,7 @@ for (let i = 0; i < 2; i++) {
   await painel.chamar('DELETE', `/api/admin/products/${`prod-grp-${i}-${marca}`}?definitivo=1`);
 }
 await q.run('DELETE FROM categories WHERE id LIKE ?', [`grp-%-${marca}`]);
-await q.run('DELETE FROM erp_categories WHERE code = ?', [codigo]);
-await q.run('DELETE FROM categories WHERE id IN (?, ?)', [slug, slugEsperado]);
-await painel.chamar('DELETE', `/api/admin/api-keys/${chave.json.id}`);
+await q.run('DELETE FROM categories WHERE id = ?', [slug]);
 
 await closePool();
 console.log(falhas === 0 ? '\ntodos os testes passaram' : `\n${falhas} falha(s)`);

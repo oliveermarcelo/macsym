@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import {
-  Database, MessageCircle, Bot, Headphones, Plug,
+  MessageCircle, Bot, Headphones, Plug,
   CheckCircle2, XCircle, Send, ExternalLink, Loader2,
   Sparkles, Zap, CreditCard, Truck, Code2,
 } from 'lucide-react';
@@ -17,8 +17,6 @@ import ApiSection from './ApiSection';
 import TransportadorasMelhorEnvio from './TransportadorasMelhorEnvio';
 
 const PROVIDER_ICON: Record<IntegrationId, React.ComponentType<{ size?: number }>> = {
-  uno: Database,
-  erp: Database,
   zapi: MessageCircle,
   evolution: MessageCircle,
   chatwoot: Headphones,
@@ -36,7 +34,6 @@ const PROVIDER_ICON: Record<IntegrationId, React.ComponentType<{ size?: number }
 const CAT_META: Record<ProviderCategory, { title: string; icon: React.ComponentType<{ size?: number; className?: string }>; grad: string; chip: string }> = {
   payment: { title: 'Pagamentos', icon: CreditCard, grad: 'from-emerald-500 to-teal-600', chip: 'bg-emerald-50 text-emerald-600' },
   logistics: { title: 'Logística & Frete', icon: Truck, grad: 'from-amber-500 to-orange-600', chip: 'bg-amber-50 text-amber-600' },
-  erp: { title: 'ERP & Gestão', icon: Database, grad: 'from-primary-blue to-primary-container', chip: 'bg-primary-blue/10 text-primary-blue' },
   whatsapp: { title: 'WhatsApp', icon: MessageCircle, grad: 'from-emerald-500 to-green-600', chip: 'bg-emerald-50 text-emerald-600' },
   chat: { title: 'Atendimento & Chatbot', icon: Headphones, grad: 'from-violet-500 to-purple-600', chip: 'bg-violet-50 text-violet-600' },
 };
@@ -45,7 +42,6 @@ type TabId = ProviderCategory | 'api';
 const TABS: { id: TabId; label: string; icon: React.ComponentType<{ size?: number }> }[] = [
   { id: 'payment', label: 'Pagamentos', icon: CreditCard },
   { id: 'logistics', label: 'Logística', icon: Truck },
-  { id: 'erp', label: 'ERP', icon: Database },
   { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
   { id: 'chat', label: 'Atendimento', icon: Headphones },
   { id: 'api', label: 'API & Dev', icon: Code2 },
@@ -68,7 +64,7 @@ export default function IntegrationsAdmin() {
           <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-brand-accent-300">Conexões</span>
           <h1 className="text-2xl sm:text-3xl font-extrabold mt-1">Integrações</h1>
           <p className="text-sm text-white/70 max-w-xl mt-2">
-            Conecte pagamentos, frete, ERP, WhatsApp e atendimento. A camada de integração
+            Conecte pagamentos, frete, WhatsApp e atendimento. A camada de integração
             já está pronta — basta inserir as credenciais e ativar.
           </p>
           <div className="flex gap-3 mt-5">
