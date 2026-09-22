@@ -78,6 +78,8 @@ interface Catalog {
     icon?: string;
     featured?: boolean;
     subcategories?: { id: string; name: string }[];
+    /** Frase curta da vitrine, quando o catálogo já traz uma. */
+    blurb?: string;
   }[];
 }
 
@@ -94,34 +96,66 @@ async function importCatalog(dir: string): Promise<void> {
   for (const c of catalog.categories ?? []) descriptions.set(c.id, c.description ?? '');
 
   /*
-   * Vitrine das seis categorias originais da loja.
+   * Vitrine das categorias — DERIVADA do catálogo, não escrita à mão.
    *
-   * A seção "Explore por categoria" era cravada no código com estas fotos e
-   * frases. Agora ela lê do banco, então a semente precisa trazê-las — senão
-   * uma instalação nova sobe com a seção vazia, e quem instalou concluiria
-   * que a home está quebrada.
+   * Aqui havia uma lista fixa com as seis categorias do projeto de origem
+   * ("pirâmides", "cristais"…). Quando o catálogo virou outro, os ids não
+   * casavam com nada: as categorias entravam sem foto, sem frase e fora da
+   * home — e a seção "Explore por categoria" nascia vazia, parecendo defeito.
    *
-   * Só vale para a PRIMEIRA gravação: o `ON DUPLICATE KEY` abaixo não toca em
-   * `image`, `blurb` nem `home`, porque esses campos passam a pertencer a quem
-   * administra a loja. Rodar a migração de novo não desfaz a escolha dela.
+   * A foto de cada categoria é a capa do produto mais caro dela: é o
+   * carro-chefe, costuma ter a melhor foto do catálogo, e não exige que
+   * alguém escolha imagem antes de a loja subir. A frase vem do próprio
+   * catálogo. Quem administra a loja troca as duas no painel a qualquer
+   * momento, e essa escolha não é desfeita por migração nenhuma (ver o
+   * ON DUPLICATE KEY abaixo).
    */
-  const vitrinePadrao: Record<string, { image: string; blurb: string }> = {
-    piramides: { image: '/banners/categoria-piramides.jpg', blurb: 'Cobre, cristal e veludo azul' },
-    cristais: { image: '/banners/categoria-cristais.jpg', blurb: 'Ametistas, quartzos e minerais' },
-    incensos: { image: '/banners/categoria-incensos.jpg', blurb: 'Incensos, incensários e essências' },
-    acessorios: { image: '/banners/categoria-acessorios.jpg', blurb: 'Pingentes, pulseiras e prata' },
-    religiosos: { image: '/banners/categoria-religiosos.jpg', blurb: 'Cruzes, santos e egípcios' },
-    decoracao: { image: '/banners/categoria-decoracao.jpg', blurb: 'Estátuas, quadros e velas' },
-  };
+  const capaDaCategoria = new Map<string, { image: string; price: number }>();
+  for (const p of catalog.products ?? []) {
+    const cat = String(p.category ?? '');
+    if (!cat || !p.image || p.active === false) continue;
+    const atual = capaDaCategoria.get(cat);
+    const preco = Number(p.price ?? 0);
+    if (!atual || preco > atual.price) capaDaCategoria.set(cat, { image: String(p.image), price: preco });
+  }
+
+  const vitrinePadrao: Record<string, { image: string; blurb: string }> = {};
+  for (const m of catalog.menu ?? []) {
+    const id = String(m.id);
+    // "Destaques" e "Novidades" são filtros, não seções de catálogo: não têm
+    // produto próprio e não entram na seção da home.
+    if (m.featured) continue;
+    const capa = capaDaCategoria.get(id);
+    if (!capa) continue;
+    vitrinePadrao[id] = {
+      image: capa.image,
+      blurb: String(m.blurb ?? descriptions.get(id) ?? ''),
+    };
+  }
 
   let pos = 0;
   for (const m of catalog.menu ?? []) {
     const vitrine = vitrinePadrao[String(m.id)];
+    /*
+     * Foto, frase e "aparece na home" pertencem a quem administra a loja —
+     * migração não desfaz escolha dela. Mas coluna de imagem vazia significa
+     * que ninguém escolheu nada ainda, e aí a semente entra: é o que conserta
+     * uma instalação que subiu com a seção da home vazia, sem obrigar
+     * ninguém a apagar linha no banco.
+     *
+     * A ORDEM das três atribuições importa: o MySQL as avalia uma a uma, e
+     * quem vier depois de `image` já enxerga o valor NOVO dela. Com `image`
+     * na frente, a condição de `home` nunca era verdadeira e a categoria
+     * continuava fora da home mesmo tendo acabado de ganhar foto.
+     */
     await q.run(
       `INSERT INTO categories (id, name, description, icon, featured, position, image, blurb, home)
        VALUES (?,?,?,?,?,?,?,?,?)
        ON DUPLICATE KEY UPDATE name=VALUES(name), description=VALUES(description),
-          icon=VALUES(icon), featured=VALUES(featured), position=VALUES(position)`,
+          icon=VALUES(icon), featured=VALUES(featured), position=VALUES(position),
+          home  = IF(image = '', VALUES(home), home),
+          blurb = IF(blurb = '', VALUES(blurb), blurb),
+          image = IF(image = '', VALUES(image), image)`,
       [
         m.id, m.name, descriptions.get(m.id) ?? '', m.icon ?? '', m.featured ? 1 : 0, pos++,
         vitrine?.image ?? '', vitrine?.blurb ?? '', vitrine === undefined ? 0 : 1,

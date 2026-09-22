@@ -184,7 +184,7 @@ function LinhaDaCategoria({ categoria, grupos, membros, onApagar }: {
           onChange={(e) => setFrase(e.target.value)}
           onBlur={() => { if (frase !== (categoria.blurb ?? '')) gravar({ blurb: frase }); }}
           maxLength={160}
-          placeholder="Frase curta — ex.: Cobre, cristal e veludo azul"
+          placeholder="Frase curta — ex.: Zoom óptico de 3x a 20x, 4K e PoE"
           className={inputCls}
         />
 
