@@ -43,6 +43,15 @@ interface CatalogProduct {
   name: string;
   category?: string;
   subcategory?: string;
+  /**
+   * TODAS as subcategorias do produto, inclusive a principal.
+   *
+   * O catálogo de origem é many-to-many: a mesma câmera está em "Câmeras PTZ",
+   * "Resolução 1080P", "Saída HDMI" e "Zoom óptico 20X" ao mesmo tempo.
+   * Ausente nos catálogos gerados antes desta mudança — nesse caso vale a
+   * principal sozinha, que é o comportamento de sempre.
+   */
+  subcategories?: string[];
   categoryLabel?: string;
   description?: string;
   longDescription?: string;
@@ -77,7 +86,7 @@ interface Catalog {
     name: string;
     icon?: string;
     featured?: boolean;
-    subcategories?: { id: string; name: string }[];
+    subcategories?: { id: string; name: string; blurb?: string }[];
     /** Frase curta da vitrine, quando o catálogo já traz uma. */
     blurb?: string;
   }[];
@@ -117,6 +126,42 @@ async function importCatalog(dir: string): Promise<void> {
     const atual = capaDaCategoria.get(cat);
     const preco = Number(p.price ?? 0);
     if (!atual || preco > atual.price) capaDaCategoria.set(cat, { image: String(p.image), price: preco });
+  }
+
+  /**
+   * As subcategorias de um produto: todas, ou a principal sozinha.
+   *
+   * Catálogos gerados antes da importação many-to-many não trazem
+   * `subcategories`. Cair na principal mantém esses catálogos carregando
+   * exatamente como carregavam.
+   */
+  const subsDoProduto = (p: CatalogProduct): string[] => {
+    const lista = p.subcategories !== undefined && p.subcategories.length > 0
+      ? p.subcategories
+      : [p.subcategory];
+    return [...new Set(lista.map((s) => String(s ?? '')).filter((s) => s !== ''))];
+  };
+
+  /*
+   * A mesma semente de foto das seções, agora por subcategoria.
+   *
+   * É a subcategoria que o cliente procura na home ("Zoom óptico 20X",
+   * "Lapela"), e um cartão sem foto sai como fundo liso. A capa é a do produto
+   * mais caro da subcategoria — o carro-chefe, que costuma ter a melhor foto —
+   * e quem administra troca no painel quando quiser.
+   *
+   * A chave é só o slug, sem a seção: a mesma "PoE" pode estar pendurada em
+   * Câmeras PTZ e valer para um acessório, e a foto não tem por que mudar
+   * conforme o galho em que a subcategoria foi pendurada.
+   */
+  const capaDaSubcategoria = new Map<string, { image: string; price: number }>();
+  for (const p of catalog.products ?? []) {
+    if (!p.image || p.active === false) continue;
+    const preco = Number(p.price ?? 0);
+    for (const sub of subsDoProduto(p)) {
+      const atual = capaDaSubcategoria.get(sub);
+      if (!atual || preco > atual.price) capaDaSubcategoria.set(sub, { image: String(p.image), price: preco });
+    }
   }
 
   const vitrinePadrao: Record<string, { image: string; blurb: string }> = {};
@@ -163,10 +208,27 @@ async function importCatalog(dir: string): Promise<void> {
     );
     let subPos = 0;
     for (const s of m.subcategories ?? []) {
+      /*
+       * Mesma regra das seções: a carga só preenche campo de vitrine que
+       * ninguém preencheu — foto e frase escolhidas no painel sobrevivem a
+       * qualquer reimportação.
+       *
+       * `home` fica FORA do UPDATE de propósito, e é aqui que a subcategoria
+       * difere da seção: a semente nunca propõe destaque para ela (são
+       * sessenta; marcar todas encheria a home e não destacaria nada). Como o
+       * valor semeado é sempre 0, copiar o `IF(image = '', …)` das seções só
+       * poderia DESMARCAR na carga seguinte o que alguém marcou no painel.
+       */
       await q.run(
-        `INSERT INTO subcategories (parent_id, id, name, position) VALUES (?,?,?,?)
-         ON DUPLICATE KEY UPDATE name=VALUES(name), position=VALUES(position)`,
-        [m.id, s.id, s.name, subPos++],
+        `INSERT INTO subcategories (parent_id, id, name, position, image, blurb)
+         VALUES (?,?,?,?,?,?)
+         ON DUPLICATE KEY UPDATE name=VALUES(name), position=VALUES(position),
+            blurb = IF(blurb = '', VALUES(blurb), blurb),
+            image = IF(image = '', VALUES(image), image)`,
+        [
+          m.id, s.id, s.name, subPos++,
+          capaDaSubcategoria.get(String(s.id))?.image ?? '', s.blurb ?? '',
+        ],
       );
     }
   }
@@ -226,6 +288,24 @@ async function importCatalog(dir: string): Promise<void> {
         p.active === false ? 0 : 1, i,
       ],
     );
+
+    /*
+     * As subcategorias do produto, regravadas do zero a cada carga.
+     *
+     * Apagar antes de inserir é o que faz a reimportação ser idempotente nos
+     * dois sentidos: sem o DELETE, uma subcategoria que o catálogo de origem
+     * tirou do produto ficaria colada nele para sempre, e o cliente acharia a
+     * câmera num filtro a que ela não pertence mais.
+     */
+    const subs = subsDoProduto(p);
+    await q.run('DELETE FROM product_subcategories WHERE product_id = ?', [p.id]);
+    if (subs.length > 0) {
+      await q.run(
+        `INSERT INTO product_subcategories (product_id, subcategory_id) VALUES ${
+          subs.map(() => '(?,?)').join(',')}`,
+        subs.flatMap((sub) => [p.id, sub]),
+      );
+    }
     i++;
   }
   say(`Produtos importados: ${i}.`);

@@ -252,6 +252,28 @@ export interface AdminState {
     featured: boolean;
   }[];
   /**
+   * TODAS as subcategorias, com a seção a que pertencem e quantos produtos
+   * ativos cada uma tem.
+   *
+   * A tela de vitrine passou a tratá-las como trata as seções — foto, frase e
+   * destaque na home —, porque é nelas que mora o que o cliente procura: o
+   * catálogo de origem tem cinco seções e sessenta subcategorias, e destacar
+   * só por seção oferecia cinco portas de entrada para o catálogo inteiro.
+   *
+   * `productCount` é o que diz se vale destacar: subcategoria vazia na home é
+   * um cartão que leva a uma lista sem nada.
+   */
+  allSubcategories?: {
+    id: string;
+    parentId: string;
+    name: string;
+    image: string;
+    blurb: string;
+    home: boolean;
+    position: number;
+    productCount: number;
+  }[];
+  /**
    * Ids de produtos presos em algum pedido que ainda vale.
    *
    * Decide se "excluir" apaga de verdade ou só tira da vitrine. Pedido

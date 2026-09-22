@@ -157,6 +157,24 @@ CREATE TABLE IF NOT EXISTS subcategories (
   id        VARCHAR(100) NOT NULL,
   name      VARCHAR(120) NOT NULL,
   position  INT          NOT NULL DEFAULT 0,
+  -- -------------------------------------------------------------------
+  -- Vitrine da subcategoria — os mesmos três campos de `categories`, e
+  -- pelo mesmo motivo.
+  --
+  -- O catálogo de origem tem cinco seções e sessenta subcategorias, e é nas
+  -- subcategorias que mora o que o cliente procura: ele quer "Zoom óptico
+  -- 20X" ou "Lapela", não "Câmeras PTZ" inteira. Com destaque só por seção,
+  -- a home só conseguia oferecer cinco portas de entrada para um catálogo
+  -- que tem sessenta.
+  --
+  -- `home` é escolha de quem administra a loja, e NÃO é semeada pela carga:
+  -- marcar as sessenta encheria a home de cartões e não destacaria nada. A
+  -- foto, sim, é semeada (capa do produto mais caro da subcategoria), senão
+  -- marcar uma subcategoria daria um cartão de fundo liso.
+  -- -------------------------------------------------------------------
+  image     VARCHAR(500) NOT NULL DEFAULT '',
+  blurb     VARCHAR(160) NOT NULL DEFAULT '',
+  home      TINYINT(1)   NOT NULL DEFAULT 0,
   PRIMARY KEY (parent_id, id),
   KEY idx_subcat_id (id),
   CONSTRAINT fk_subcat_parent FOREIGN KEY (parent_id)
@@ -215,6 +233,34 @@ CREATE TABLE IF NOT EXISTS product_images (
   PRIMARY KEY (id),
   KEY idx_prodimg (product_id, position),
   CONSTRAINT fk_prodimg_produto FOREIGN KEY (product_id)
+    REFERENCES products (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ---------------------------------------------------------------------
+-- A que subcategorias cada produto pertence — TODAS elas.
+--
+-- `products.subcategory` guarda UMA, e continua guardando: é a que vai no
+-- rótulo do cartão e na trilha da página do produto. Mas o catálogo de origem
+-- é many-to-many de verdade: a mesma câmera está ao mesmo tempo em "Câmeras
+-- PTZ", "Resolução 1080P", "Saída HDMI", "Zoom óptico 20X" e "PoE". Com uma
+-- coluna só, 55 das 60 subcategorias importadas ficariam VAZIAS — existiriam
+-- no menu e levariam a uma lista sem nada, porque cada produto só consegue
+-- declarar a primeira.
+--
+-- Sem FK para `subcategories`: a chave de lá é (parent_id, id), e a
+-- subcategoria a que um produto pertence não depende da seção em que ele foi
+-- pendurado — a mesma "PoE" vale para câmera e para acessório. O índice em
+-- `subcategory_id` é o que o filtro da vitrine percorre.
+--
+-- A carga regrava estas linhas por produto (apaga as dele, insere as novas),
+-- então reimportar o catálogo não acumula duplicata nem deixa sobra.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS product_subcategories (
+  product_id     VARCHAR(100) NOT NULL,
+  subcategory_id VARCHAR(100) NOT NULL,
+  PRIMARY KEY (product_id, subcategory_id),
+  KEY idx_prodsub_sub (subcategory_id),
+  CONSTRAINT fk_prodsub_produto FOREIGN KEY (product_id)
     REFERENCES products (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

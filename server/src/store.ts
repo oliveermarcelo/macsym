@@ -248,6 +248,7 @@ export async function publicSettings(exec: Q = q): Promise<Record<string, unknow
 export function productRowToApi(
   r: Row,
   galeria?: string[],
+  subcategorias?: string[],
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {
     id: r.id,
@@ -301,7 +302,49 @@ export function productRowToApi(
    * ruído em toda resposta da loja.
    */
   if (galeria !== undefined && galeria.length > 0) out.images = galeria;
+  /*
+   * TODAS as subcategorias do produto — a principal inclusive.
+   *
+   * `subcategory` continua sendo UMA, porque é a que vira rótulo do cartão e
+   * trilha da página. Mas o catálogo de origem é many-to-many: a mesma câmera
+   * está em "Resolução 1080P", "Saída HDMI" e "Zoom óptico 20X" ao mesmo
+   * tempo, e com uma só a vitrine mostrava a câmera em uma dessas listas e
+   * deixava as outras vazias.
+   *
+   * Só aparece quando existe, como `images`: array vazio em cada um dos 1.400
+   * produtos é ruído em toda resposta da loja. Quem consome e não encontra o
+   * campo cai em `subcategory`, que é exatamente o catálogo de antes.
+   */
+  if (subcategorias !== undefined && subcategorias.length > 0) out.subcategories = subcategorias;
   return out;
+}
+
+/**
+ * As subcategorias de vários produtos de uma vez.
+ *
+ * Uma consulta para o catálogo inteiro, pelo mesmo motivo de `galeriasDe`: com
+ * uma consulta por produto, abrir a vitrine viraria 1.400 idas ao banco.
+ */
+export async function subcategoriasDe(
+  ids: string[],
+  exec: Q = q,
+): Promise<Map<string, string[]>> {
+  const mapa = new Map<string, string[]>();
+  if (ids.length === 0) return mapa;
+
+  const linhas = await exec.all(
+    `SELECT product_id, subcategory_id FROM product_subcategories
+      WHERE product_id IN (${placeholders(ids.length)})
+      ORDER BY subcategory_id ASC`,
+    ids,
+  );
+  for (const l of linhas) {
+    const chave = String(l.product_id);
+    const lista = mapa.get(chave);
+    if (lista) lista.push(String(l.subcategory_id));
+    else mapa.set(chave, [String(l.subcategory_id)]);
+  }
+  return mapa;
 }
 
 /**
@@ -363,8 +406,10 @@ export async function fetchProducts(
 
   // Uma consulta para o catálogo inteiro, não uma por produto.
   const linhas = await exec.all(`SELECT * FROM products${where} ORDER BY position ASC, name ASC`);
-  const galerias = await galeriasDe(linhas.map((r) => String(r.id)), exec);
-  return linhas.map((r) => productRowToApi(r, galerias.get(String(r.id))));
+  const ids = linhas.map((r) => String(r.id));
+  const galerias = await galeriasDe(ids, exec);
+  const subs = await subcategoriasDe(ids, exec);
+  return linhas.map((r) => productRowToApi(r, galerias.get(String(r.id)), subs.get(String(r.id))));
 }
 
 // ---------------------------------------------------------- Categorias ----
@@ -372,8 +417,8 @@ export async function fetchProducts(
 /**
  * Monta a árvore de navegação da loja a partir das linhas de categoria.
  *
- * O catálogo tem categorias irmãs demais no mesmo nível — "Pirâmides de
- * Cristal", "de Madeira", "de Impressão 3D" —, e nenhuma "Pirâmides" para o
+ * O catálogo tem categorias irmãs demais no mesmo nível — "Câmeras PTZ",
+ * "Webcams e 360°", "Mesas Controladoras" —, e nenhuma "Áudio e Vídeo" para o
  * cliente clicar. A loja agrupa por cima disso: uma categoria pode apontar
  * para outra como sua CATEGORIA GERAL, e então some do topo e passa a aparecer
  * dentro dela.
@@ -393,6 +438,15 @@ export interface ItemDeMenu {
   name: string;
   /** Verdadeiro quando este filho é, ele próprio, uma categoria agrupada. */
   isCategory?: boolean;
+  /**
+   * Vitrine da subcategoria, para a home poder destacá-la como destaca uma
+   * seção. Categoria agrupada não traz estes campos: ela já aparece na home
+   * pela própria linha em `categories`, e trazê-los aqui daria dois cartões
+   * para a mesma categoria.
+   */
+  image?: string;
+  blurb?: string;
+  home?: boolean;
 }
 
 export function montarMenu(

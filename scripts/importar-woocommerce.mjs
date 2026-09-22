@@ -38,15 +38,22 @@ const BASE = arg('base', 'https://camerasdevideo.com.br').replace(/\/+$/, '');
  *
  * O WooCommerce da Macsym tem 60 categorias no mesmo balaio: seção de verdade
  * ("Câmeras PTZ"), característica técnica ("Saída HDMI", "PoE") e marca
- * ("Boya", "Ismart"). Jogar tudo no menu dá um menu que ninguém lê.
+ * ("Boya", "Ismart"). Aqui existem cinco SEÇÕES, e a seção de um produto sai
+ * dos `marcadores` — é o que evita um menu de sessenta irmãs no primeiro
+ * nível.
  *
- * Aqui só existem cinco seções, e cada uma escolhe à mão as características
- * que viram subcategoria. O resto continua no produto — só não vira item de
- * menu. A ORDEM de MAES importa: um produto costuma cair em várias listas, e
- * fica na primeira que casar. Por isso a câmera 360 é webcam e não PTZ, e por
- * isso Acessórios vem antes de Câmeras PTZ: um suporte de parede é marcado
- * também como "Câmeras PTZ" lá no WooCommerce, e sem essa ordem ele entrava
- * na vitrine como se fosse câmera.
+ * A ORDEM de MAES importa: um produto costuma cair em várias listas, e fica na
+ * primeira que casar. Por isso a câmera 360 é webcam e não PTZ, e por isso
+ * Acessórios vem antes de Câmeras PTZ: um suporte de parede é marcado também
+ * como "Câmeras PTZ" lá no WooCommerce, e sem essa ordem ele entrava na
+ * vitrine como se fosse câmera.
+ *
+ * `subs` deixou de ser a lista do que VIRA subcategoria — hoje toda categoria
+ * do WooCommerce vira uma (ver `subcategoriasDoCatalogo`, mais abaixo). O que
+ * ela continua sendo é a ORDEM DE PREFERÊNCIA para escolher a subcategoria
+ * PRINCIPAL do produto, que é a que vai no rótulo do cartão. Sem essa
+ * preferência, o rótulo de uma câmera sairia "Boya" ou "PoE" — o que a API
+ * devolver primeiro —, em vez de "Zoom Óptico 20x".
  *
  * "outros" e "uncategorized" NÃO são marcadores de Acessórios: metade do
  * catálogo carrega uma dessas por descuido de cadastro, inclusive câmeras.
@@ -187,6 +194,43 @@ console.log(`  ${produtos.length} produtos, ${categorias.length} categorias.`);
 
 const nomeDaCategoria = new Map(categorias.map((c) => [c.slug, c.name]));
 
+/*
+ * TODA categoria do WooCommerce vira subcategoria — menos duas.
+ *
+ * A curadoria anterior escolhia à mão umas poucas por seção, e o efeito era o
+ * oposto do pretendido: o cliente que procura "Saída HDMI" ou "Controle por
+ * aplicativo" não encontrava nada, porque a informação existia no catálogo de
+ * origem e era jogada fora na importação.
+ *
+ * Ficam de fora:
+ *  · "uncategorized" e "outros" — não descrevem nada; metade do catálogo
+ *    carrega uma delas por descuido de cadastro;
+ *  · os slugs que JÁ SÃO seção ("cameras-ptz", "microfones"…) — virariam uma
+ *    subcategoria com o nome da própria seção que a contém, e o menu leria
+ *    "Câmeras PTZ › Câmeras PTZ".
+ */
+const IDS_DE_SECAO = new Set(MAES.map((m) => m.id));
+const DESCARTADAS = new Set(['uncategorized', 'outros']);
+const viraSub = (slug) => !DESCARTADAS.has(slug) && !IDS_DE_SECAO.has(slug);
+
+/*
+ * A seção declarada à mão para as subcategorias curadas.
+ *
+ * Ela ganha da contagem por produto: "Linha BOYA" é de Microfones por decisão,
+ * mesmo que um dia apareça um acessório da marca e a maioria escorregue.
+ */
+const secaoCurada = new Map();
+for (const m of MAES) {
+  for (const [slug] of m.subs) if (!secaoCurada.has(slug)) secaoCurada.set(slug, m.id);
+}
+
+/** O nome vem da API; o da lista curada é só rede de segurança. */
+const nomeCurado = new Map();
+for (const m of MAES) {
+  for (const [slug, nome] of m.subs) if (!nomeCurado.has(slug)) nomeCurado.set(slug, nome);
+}
+const nomeDaSub = (slug) => nomeDaCategoria.get(slug) ?? nomeCurado.get(slug) ?? slug;
+
 const semPreco = [];
 const semFoto = [];
 const produtosSaida = [];
@@ -197,7 +241,19 @@ for (const p of produtos) {
   const mae =
     MAES.find((m) => m.marcadores.some((s) => slugs.includes(s))) ??
     MAES.find((m) => m.id === 'acessorios');
-  const sub = mae.subs.find(([slug]) => slugs.includes(slug));
+
+  /*
+   * A subcategoria PRINCIPAL continua saindo da lista curada, na ordem dela.
+   *
+   * É ela que vira o rótulo do cartão e a trilha da página. A API devolve as
+   * categorias do produto em ordem própria, então pegar "a primeira" faria o
+   * rótulo de uma câmera sair "Boya" ou "PoE". Sem nenhuma curada casando, o
+   * produto fica sem principal e o rótulo é o nome da seção — que é o
+   * comportamento de antes.
+   */
+  const principal = mae.subs.find(([slug]) => slugs.includes(slug))?.[0];
+  // Todas a que o produto pertence, com a principal na frente.
+  const subsDoProduto = [...new Set([principal, ...slugs].filter((x) => x && viraSub(x)))];
 
   const preco = Number(p.prices?.price ?? 0) / 100;
   const de = Number(p.prices?.regular_price ?? 0) / 100;
@@ -217,8 +273,9 @@ for (const p of produtos) {
     id: `wc-${p.id}`,
     name: limpar(p.name),
     category: mae.id,
-    subcategory: sub?.[0],
-    categoryLabel: sub ? sub[1] : mae.name,
+    subcategory: principal,
+    subcategories: subsDoProduto,
+    categoryLabel: principal ? nomeDaSub(principal) : mae.name,
     description: corta(curta, 220),
     longDescription: longa ? corta(longa, 2000) : undefined,
     price: preco,
@@ -261,10 +318,70 @@ for (const p of produtosSaida) {
   if (p.tag) p.highlight = true;
 }
 
-// Só entra no menu a subcategoria que tem produto: item de menu que leva a
-// uma lista vazia é o erro mais fácil de cometer numa migração de catálogo.
-const usadas = new Set(produtosSaida.map((p) => p.subcategory).filter(Boolean));
+/*
+ * Só entra no menu a subcategoria que tem produto: item de menu que leva a uma
+ * lista vazia é o erro mais fácil de cometer numa migração de catálogo.
+ *
+ * Agora a conta é sobre TODAS as subcategorias do produto, e não só a
+ * principal — era exatamente por isso que 55 das 60 categorias do WooCommerce
+ * nasciam vazias: cada produto só conseguia declarar uma.
+ */
+const usoPorSub = new Map();
+for (const p of produtosSaida) {
+  for (const slug of p.subcategories) {
+    const porSecao = usoPorSub.get(slug) ?? new Map();
+    porSecao.set(p.category, (porSecao.get(p.category) ?? 0) + 1);
+    usoPorSub.set(slug, porSecao);
+  }
+}
 const usadasMae = new Set(produtosSaida.map((p) => p.category));
+
+/*
+ * Em qual seção cada subcategoria fica pendurada.
+ *
+ * Uma característica atravessa seções — "PoE" vale para câmera e para
+ * acessório —, mas o menu precisa pendurá-la em UMA. Vence a seção onde ela
+ * tem mais produto, porque é onde o cliente vai procurar; a ordem de MAES
+ * desempata, e a lista curada decide sozinha o que foi decidido à mão.
+ *
+ * Pendurar em um galho só não esconde produto nenhum: quem filtra por
+ * subcategoria compara com a lista do produto, e a seção do produto continua
+ * sendo a dos marcadores.
+ */
+const secaoDaSub = new Map();
+for (const [slug, porSecao] of usoPorSub) {
+  const curada = secaoCurada.get(slug);
+  if (curada !== undefined && usadasMae.has(curada)) {
+    secaoDaSub.set(slug, curada);
+    continue;
+  }
+  let melhor = null;
+  let maior = -1;
+  for (const m of MAES) {
+    const n = porSecao.get(m.id) ?? 0;
+    if (n > maior) {
+      maior = n;
+      melhor = m.id;
+    }
+  }
+  secaoDaSub.set(slug, melhor);
+}
+
+/**
+ * As subcategorias de uma seção: as curadas primeiro, na ordem da curadoria, e
+ * depois as demais em ordem alfabética.
+ *
+ * A curadoria é a leitura que alguém fez do catálogo ("Zoom Óptico 3x, 10x,
+ * 12x, 20x", nessa ordem); jogar tudo em ordem alfabética junto desfaria isso
+ * e deixaria "Zoom Óptico 10x" antes de "3x".
+ */
+const subsDaSecao = (m) => {
+  const curadas = m.subs.map(([slug]) => slug).filter((slug) => secaoDaSub.get(slug) === m.id);
+  const resto = [...usoPorSub.keys()]
+    .filter((slug) => secaoDaSub.get(slug) === m.id && !curadas.includes(slug))
+    .sort((a, b) => nomeDaSub(a).localeCompare(nomeDaSub(b), 'pt-BR'));
+  return [...curadas, ...resto].map((slug) => ({ id: slug, name: nomeDaSub(slug) }));
+};
 
 const ts = (v) => JSON.stringify(v, null, 2).replace(/"([a-zA-Z_][\w]*)":/g, '$1:');
 
@@ -285,9 +402,7 @@ const menuOut = [
     icon: m.icon,
     home: true,
     blurb: m.description,
-    subcategories: m.subs
-      .filter(([slug]) => usadas.has(slug))
-      .map(([slug, nome]) => ({ id: slug, name: nome })),
+    subcategories: subsDaSecao(m),
   })),
   { id: 'novidades', name: 'Novidades', icon: 'Sparkles', featured: true, subcategories: [] },
 ];
@@ -318,7 +433,10 @@ export const PRODUCTS: Product[] = ${ts(produtosSaida)};
 
 writeFileSync(resolve(root, 'src/data.ts'), arquivo, 'utf8');
 
-console.log(`\nsrc/data.ts gerado: ${produtosSaida.length} produtos em ${categoriesOut.length - 1} seções.`);
+console.log(
+  `\nsrc/data.ts gerado: ${produtosSaida.length} produtos em ${categoriesOut.length - 1} seções `
+  + `e ${usoPorSub.size} subcategorias.`,
+);
 if (semPreco.length) console.log(`  sem preço (entraram desativados): ${semPreco.join(', ')}`);
 if (semFoto.length) console.log(`  sem foto  (entraram desativados): ${semFoto.join(', ')}`);
 console.log('\nPróximo passo:  npm run seed:catalogo && npm run sync:midia');

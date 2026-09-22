@@ -325,7 +325,7 @@ export default function App() {
           <TrustBar />
           <CategoryFilter
             activeCategory={activeCategory}
-            setActiveCategory={(cat) => selectCategory(cat)}
+            setActiveCategory={(cat, sub) => selectCategory(cat, sub)}
           />
           <ProductRail
             eyebrow="Mais procurados"

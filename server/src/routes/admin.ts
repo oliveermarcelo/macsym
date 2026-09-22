@@ -24,7 +24,7 @@ import {
   configGet, configMerge, configSet, DEFAULT_RECOVERY, DEFAULT_SETTINGS, DEFAULT_SHIPPING,
   fetchIntegrations, fetchOrders, fetchProducts, galeriasDe, getRecovery, getSettings, getShipping,
   integrationSecrets, integrationToApi, INTEGRATION_IDS, INTEGRATION_SECRET_FIELDS,
-  montarMenu, productRowToApi, transicaoDeStatus,
+  type ItemDeMenu, montarMenu, productRowToApi, transicaoDeStatus,
 } from '../store.ts';
 import {
   emailValido, motivoParaNaoDesativar, nomeValido, normalizarEmail, problemaNaSenha,
@@ -102,13 +102,46 @@ adminRoutes.get('/state', h(async (req, res) => {
     }
   }
 
-  const subs = new Map<string, { id: string; name: string }[]>();
-  for (const sub of await q.all('SELECT * FROM subcategories ORDER BY position ASC, name ASC')) {
+  const linhasSub = await q.all('SELECT * FROM subcategories ORDER BY position ASC, name ASC');
+  const subs = new Map<string, ItemDeMenu[]>();
+  for (const sub of linhasSub) {
     const key = String(sub.parent_id);
-    const entry = { id: String(sub.id), name: String(sub.name) };
+    const entry: ItemDeMenu = {
+      id: String(sub.id),
+      name: String(sub.name),
+      image: String(sub.image ?? ''),
+      blurb: String(sub.blurb ?? ''),
+      home: Boolean(sub.home),
+    };
     const list = subs.get(key);
     if (list) list.push(entry);
     else subs.set(key, [entry]);
+  }
+
+  /*
+   * Quantos produtos ATIVOS cada subcategoria tem.
+   *
+   * Sai das duas origens de uma vez porque as duas valem: `products.subcategory`
+   * é a principal (e é tudo o que existe num banco que ainda não recebeu a
+   * carga nova), e `product_subcategories` são todas. Contar só a tabela nova
+   * mostraria zero em toda a tela num banco antigo; contar só a coluna
+   * mostraria 1 onde há 40. `DISTINCT` porque a principal aparece nas duas.
+   *
+   * A contagem é o que diz a quem administra se vale a pena destacar aquela
+   * subcategoria na home — e denuncia na hora a subcategoria que ficou vazia.
+   */
+  const contagemSub = new Map<string, number>();
+  for (const linha of await q.all(
+    `SELECT t.sub AS sub, COUNT(DISTINCT t.pid) AS n
+       FROM (
+         SELECT subcategory_id AS sub, product_id AS pid FROM product_subcategories
+         UNION ALL
+         SELECT subcategory, id FROM products WHERE subcategory IS NOT NULL AND subcategory <> ''
+       ) t
+       JOIN products p ON p.id = t.pid AND p.active = 1
+      GROUP BY t.sub`,
+  )) {
+    contagemSub.set(String(linha.sub), Number(linha.n) || 0);
   }
 
   jsonOk(res, {
@@ -137,6 +170,22 @@ adminRoutes.get('/state', h(async (req, res) => {
         groupId: c.group_id === null || c.group_id === undefined ? null : String(c.group_id),
         featured: Boolean(c.featured),
       })),
+    /*
+     * As subcategorias, cruas, com a seção a que pertencem e quantos produtos
+     * têm. É desta lista que vive a tela de vitrine: o catálogo de origem tem
+     * sessenta subcategorias e cinco seções, então destacar na home só por
+     * seção deixava de fora justamente o que o cliente procura.
+     */
+    allSubcategories: linhasSub.map((sub) => ({
+      id: String(sub.id),
+      parentId: String(sub.parent_id),
+      name: String(sub.name),
+      image: String(sub.image ?? ''),
+      blurb: String(sub.blurb ?? ''),
+      home: Boolean(sub.home),
+      position: Number(sub.position) || 0,
+      productCount: contagemSub.get(String(sub.id)) ?? 0,
+    })),
     // O painel vê tudo: inativo e sem categoria também — é ele quem resolve.
     products: await fetchProducts({ onlyActive: false }),
     /*
@@ -266,6 +315,26 @@ adminRoutes.post('/products', h(async (req, res) => {
   );
 
   /*
+   * A subcategoria PRINCIPAL também entra na lista de subcategorias.
+   *
+   * Sem isto, trocar a subcategoria de um produto no painel gravava a coluna e
+   * o produto continuava fora da lista da subcategoria nova — o filtro da
+   * vitrine percorre `product_subcategories`, e ninguém entenderia por que o
+   * produto que acabou de ser movido não aparece onde foi colocado.
+   *
+   * Só ACRESCENTA. As outras subcategorias (que vêm da carga do catálogo e o
+   * painel não edita) ficam onde estão: apagá-las aqui tiraria o produto de
+   * "Resolução 1080P" e de "PoE" porque alguém corrigiu o nome dele.
+   */
+  const principal = bodyStr(b, 'subcategory', '', 64);
+  if (principal !== '') {
+    await q.run(
+      'INSERT IGNORE INTO product_subcategories (product_id, subcategory_id) VALUES (?,?)',
+      [id, principal],
+    );
+  }
+
+  /*
    * Fotos extras: a lista enviada substitui a que estava lá.
    *
    * Só mexe quando o campo VEM no corpo. Quem grava produto por fora — a
@@ -368,10 +437,10 @@ adminRoutes.delete('/products/:id', h(async (req, res) => {
 /**
  * POST /api/admin/categories — cria uma CATEGORIA GERAL, à mão.
  *
- * Existe porque o catálogo importado traz "Pirâmides de Cristal", "de Madeira",
- * "de Impressão 3D" como categorias soltas, todas no mesmo nível: não há uma
- * "Pirâmides" para o cliente clicar. A loja cria a sua e pendura as outras
- * dentro, sem mover produto nenhum.
+ * Existe porque o catálogo importado traz "Câmeras PTZ", "Webcams e 360°",
+ * "Mesas Controladoras" como categorias soltas, todas no mesmo nível: não há
+ * uma "Áudio e Vídeo" para o cliente clicar. A loja cria a sua e pendura as
+ * outras dentro, sem mover produto nenhum.
  *
  * Nasce com `manual = 1`, e é isso que a distingue das que vieram na carga do
  * catálogo: só as criadas aqui podem ser apagadas pela tela.
@@ -486,8 +555,8 @@ adminRoutes.patch('/categories/:id', h(async (req, res) => {
    * Três recusas, e as três evitam um menu que não fecha ou uma categoria que
    * some: não dá para pendurar numa categoria que não existe, nem em si mesma,
    * nem dentro de uma categoria que já está dentro de outra — só há um nível
-   * de agrupamento, e é o que basta para o problema real (o catálogo com
-   * "Pirâmides de X" tudo solto no mesmo nível).
+   * de agrupamento, e é o que basta para o problema real (o catálogo com as
+   * seções todas soltas no mesmo nível).
    */
   if (b.groupId !== undefined) {
     const grupo = bodyStr(b, 'groupId', '', 100);
@@ -546,6 +615,62 @@ adminRoutes.patch('/categories/:id', h(async (req, res) => {
       blurb: String(c.blurb ?? ''),
       home: Boolean(c.home),
       position: Number(c.position) || 0,
+    })),
+  });
+}));
+
+/**
+ * PATCH /api/admin/subcategories/:parentId/:id — a vitrine de uma subcategoria.
+ *
+ * Mesmo contrato do PATCH de categoria: só foto, frase e destaque na home, e
+ * campo ausente não é mexido. O nome continua vindo da carga do catálogo.
+ *
+ * A seção vai na URL porque a chave da subcategoria é (parent_id, id), e não o
+ * slug sozinho: o catálogo de origem repete slug entre galhos ("resolucao-4k"
+ * existe para câmera e para webcam), e gravar só pelo slug mudaria a foto das
+ * duas de uma vez.
+ */
+adminRoutes.patch('/subcategories/:parentId/:id', h(async (req, res) => {
+  await requireAdmin(req);
+  const parentId = String(req.params.parentId ?? '');
+  const id = String(req.params.id ?? '');
+  const b = body(req);
+
+  const campos: string[] = [];
+  const valores: unknown[] = [];
+
+  if (typeof b.image === 'string') {
+    campos.push('image = ?');
+    valores.push(b.image.slice(0, 500));
+  }
+  if (typeof b.blurb === 'string') {
+    campos.push('blurb = ?');
+    valores.push(b.blurb.slice(0, 160));
+  }
+  if (b.home !== undefined) {
+    campos.push('home = ?');
+    valores.push(bodyBool(b, 'home') ? 1 : 0);
+  }
+
+  if (campos.length === 0) fail('Nada a alterar.', 422, 'no_fields');
+
+  const mudou = await q.run(
+    `UPDATE subcategories SET ${campos.join(', ')} WHERE parent_id = ? AND id = ?`,
+    [...valores, parentId, id],
+  );
+  if (mudou === 0) fail('Subcategoria não encontrada.', 404, 'not_found');
+
+  // A lista inteira de volta, como no PATCH de categoria: um clique aqui muda
+  // o contador de "na home" que a mesma tela mostra.
+  const linhas = await q.all('SELECT * FROM subcategories ORDER BY position ASC, name ASC');
+  jsonOk(res, {
+    subcategories: linhas.map((sub) => ({
+      id: String(sub.id),
+      parentId: String(sub.parent_id),
+      name: String(sub.name),
+      image: String(sub.image ?? ''),
+      blurb: String(sub.blurb ?? ''),
+      home: Boolean(sub.home),
     })),
   });
 }));

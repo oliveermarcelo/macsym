@@ -24,7 +24,8 @@ import {
 } from '../pricing.ts';
 import { fireWebhooks } from '../providers.ts';
 import {
-  fetchProducts, getSettings, getShipping, montarMenu, productRowToApi, publicSettings,
+  fetchProducts, getSettings, getShipping, type ItemDeMenu, montarMenu, productRowToApi,
+  publicSettings,
 } from '../store.ts';
 import { h } from './helpers.ts';
 
@@ -73,11 +74,20 @@ publicRoutes.get('/payments/config', h(async (_req, res) => {
 publicRoutes.get('/catalog', h(async (_req, res) => {
   const parents = await q.all('SELECT * FROM categories ORDER BY position ASC, name ASC');
 
-  const children = new Map<string, { id: string; name: string }[]>();
+  // A vitrine da subcategoria (foto, frase, destaque na home) vem junto: a
+  // seção "Explore por categoria" passou a mostrar seções E subcategorias, e
+  // uma segunda requisição só para as fotos faria a home piscar.
+  const children = new Map<string, ItemDeMenu[]>();
   for (const s of await q.all('SELECT * FROM subcategories ORDER BY position ASC, name ASC')) {
     const key = String(s.parent_id);
     const list = children.get(key);
-    const entry = { id: String(s.id), name: String(s.name) };
+    const entry: ItemDeMenu = {
+      id: String(s.id),
+      name: String(s.name),
+      image: String(s.image ?? ''),
+      blurb: String(s.blurb ?? ''),
+      home: Boolean(s.home),
+    };
     if (list) list.push(entry);
     else children.set(key, [entry]);
   }

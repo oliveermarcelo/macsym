@@ -38,6 +38,11 @@ interface AdminContextValue {
       image?: string; blurb?: string; home?: boolean; position?: number; groupId?: string;
     },
   ) => Promise<void>;
+  updateSubcategoryShowcase: (
+    parentId: string,
+    id: string,
+    patch: { image?: string; blurb?: string; home?: boolean },
+  ) => Promise<void>;
   createCategory: (name: string) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
   deleteOrder: (id: string) => Promise<void>;
@@ -207,6 +212,25 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
             menu: s.menu.map((c) => (c.id === id ? { ...c, ...patch } : c)),
           }),
           () => store.updateCategoryShowcase(id, patch).then(() => undefined),
+        ),
+
+      /*
+       * Mesma resposta otimista da categoria, e pelo mesmo motivo: quem está
+       * montando a home troca foto e marca caixinha em sequência, e esperar o
+       * servidor a cada clique faria a tela parecer travada.
+       *
+       * A comparação é pela DUPLA (seção, slug): o slug sozinho se repete
+       * entre seções, e casar só por ele mudaria duas linhas na tela.
+       */
+      updateSubcategoryShowcase: (parentId, id, patch) =>
+        mutate(
+          (s) => ({
+            ...s,
+            allSubcategories: (s.allSubcategories ?? []).map((sub) => (
+              sub.parentId === parentId && sub.id === id ? { ...sub, ...patch } : sub
+            )),
+          }),
+          () => store.updateSubcategoryShowcase(parentId, id, patch).then(() => undefined),
         ),
 
       /*

@@ -17,8 +17,10 @@ import { safeImageSrc } from '../../utils/safeUrl';
 const blank = (): Product => ({
   id: '',
   name: '',
-  category: 'piramides',
-  categoryLabel: 'Pirâmides',
+  // Produto novo nasce sem categoria: quem cadastra escolhe. Cravar uma aqui
+  // fazia o produto cair numa seção que talvez nem exista neste catálogo.
+  category: '',
+  categoryLabel: '',
   description: '',
   price: 0,
   stock: 0,

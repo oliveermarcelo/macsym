@@ -212,10 +212,29 @@ export function updateCategoryShowcase(
 }
 
 /**
+ * Foto, frase e destaque na home de uma SUBCATEGORIA.
+ *
+ * A seção vai junto porque a chave é (seção, slug), e não o slug sozinho: o
+ * catálogo de origem repete slug entre galhos ("resolucao-4k" existe para
+ * câmera e para webcam), e gravar só pelo slug trocaria a foto das duas.
+ */
+export function updateSubcategoryShowcase(
+  parentId: string,
+  id: string,
+  patch: { image?: string; blurb?: string; home?: boolean },
+): Promise<{ subcategories: { id: string; parentId: string; image: string; blurb: string; home: boolean }[] }> {
+  return api.patch(
+    `/admin/subcategories/${encodeURIComponent(parentId)}/${encodeURIComponent(id)}`,
+    patch,
+  );
+}
+
+/**
  * Cria uma categoria geral, à mão.
  *
- * O catálogo traz "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D"
- * soltas, no mesmo nível — não existe uma "Pirâmides" para o cliente clicar.
+ * O catálogo traz "Câmeras PTZ", "Webcams e 360°" e "Mesas Controladoras"
+ * soltas, no mesmo nível — não existe uma "Áudio e Vídeo" para o cliente
+ * clicar.
  * Esta é a forma de a loja criar a sua e pendurar as outras dentro.
  */
 export function createCategory(name: string): Promise<{ id: string; name: string }> {

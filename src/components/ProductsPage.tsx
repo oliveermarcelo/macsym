@@ -30,15 +30,30 @@ const isNew = (p: Product) => p.tag === 'NOVIDADE';
  * O produto pertence a esta categoria?
  *
  * `membros` são as categorias agrupadas DENTRO desta. O catálogo tem
- * "Pirâmides de Cristal", "de Madeira" e "de Impressão 3D" soltas; o painel as
- * pendura numa categoria geral "Pirâmides", e nenhum produto se move — cada um
+ * "Câmeras PTZ", "Webcams e 360°" e "Mesas Controladoras" soltas; o painel
+ * pode pendurá-las numa geral "Áudio e Vídeo", e nenhum produto se move — cada um
  * continua apontando para a categoria em que foi cadastrado. Então, para a
  * categoria geral, pertencer é estar em QUALQUER uma das filhas.
  *
- * Sem isso, clicar em "Pirâmides" mostraria zero produtos: nenhum produto tem
+ * Sem isso, clicar na geral mostraria zero produtos: nenhum produto tem
  * essa categoria, porque ela é um agrupamento e não uma categoria do
  * catálogo.
  */
+/**
+ * As subcategorias do produto — todas, ou a principal sozinha.
+ *
+ * O catálogo é many-to-many: a mesma câmera está em "Resolução 1080P", "Saída
+ * HDMI" e "Zoom óptico 20X" ao mesmo tempo. Comparar só com `subcategory`
+ * mostrava a câmera em UMA dessas listas e deixava as outras vazias — e são
+ * elas que o cliente clica no menu.
+ *
+ * O `??` cobre o produto gravado antes desta mudança, cuja resposta não traz a
+ * lista: aí vale a principal, que é o comportamento de sempre.
+ */
+function subcategoriasDe(p: Product): string[] {
+  return p.subcategories ?? (p.subcategory ? [p.subcategory] : []);
+}
+
 function matchesCategory(p: Product, categoryId: string, membros: string[] = []): boolean {
   if (categoryId === 'all') return true;
   if (categoryId === 'destaques' || categoryId === 'promocoes') return isPromo(p);
@@ -106,7 +121,7 @@ export default function ProductsPage({
         ? true
         : subEhCategoria
           ? product.category === activeSubcategory
-          : product.subcategory === activeSubcategory;
+          : subcategoriasDe(product).includes(activeSubcategory);
       const matchSearch =
         !q ||
         product.name.toLowerCase().includes(q) ||

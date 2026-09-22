@@ -6,9 +6,22 @@
 export interface Product {
   id: string;
   name: string;
-  category: string; // slug da categoria-mãe, ex.: 'piramides', 'cristais'
-  subcategory?: string; // slug da subcategoria, ex.: 'piramides-de-cobre'
-  categoryLabel: string; // rótulo exibido, ex.: 'Pirâmides de Cobre'
+  category: string; // slug da seção, ex.: 'cameras-ptz', 'microfones'
+  subcategory?: string; // slug da subcategoria principal, ex.: 'zoom-optico-20x'
+  /**
+   * TODAS as subcategorias a que o produto pertence, a principal inclusive.
+   *
+   * O catálogo de origem é many-to-many: a mesma câmera está em "Câmeras PTZ",
+   * "Resolução 1080P", "Saída HDMI" e "Zoom óptico 20X" ao mesmo tempo.
+   * `subcategory` continua sendo UMA — a que vira rótulo do cartão e trilha da
+   * página —, mas o filtro da vitrine usa esta lista: sem ela, o produto
+   * aparecia em uma subcategoria e as outras nasciam vazias.
+   *
+   * Ausente em produto que a carga antiga gravou; quem filtra cai em
+   * `subcategory`, que é o catálogo de antes.
+   */
+  subcategories?: string[];
+  categoryLabel: string; // rótulo exibido, ex.: 'Zoom Óptico 20x'
   description: string;
   longDescription?: string;
   price: number;
@@ -64,12 +77,26 @@ export interface SubCategory {
    * Verdadeiro quando este item do segundo nível é, ele próprio, uma
    * CATEGORIA agrupada — e não uma subcategoria.
    *
-   * O catálogo tem categorias soltas ("Pirâmides de Cristal", "de Madeira"); o
+   * O catálogo tem categorias soltas ("Câmeras PTZ", "Webcams e 360°"); o
    * painel as pendura numa categoria geral sem mover produto nenhum. Filtrar
    * por uma delas é comparar com `product.category`, e não com
    * `product.subcategory`.
    */
   isCategory?: boolean;
+  /**
+   * Vitrine da subcategoria, editada em Painel → Vitrine das Categorias.
+   *
+   * Existe pelo mesmo motivo de `MenuCategory.home`, um nível abaixo: o
+   * catálogo tem cinco seções e sessenta subcategorias, e é a subcategoria que
+   * o cliente procura ("Zoom óptico 20X", "Lapela"). Destacar só por seção
+   * dava cinco portas de entrada para um catálogo de sessenta.
+   *
+   * Categoria agrupada (`isCategory`) não traz estes campos: ela já se destaca
+   * pela própria linha de categoria, e repetir daria dois cartões iguais.
+   */
+  image?: string;
+  blurb?: string;
+  home?: boolean;
 }
 
 export interface MenuCategory {

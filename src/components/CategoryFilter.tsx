@@ -11,7 +11,18 @@ import { safeImageSrc } from '../utils/safeUrl';
 
 interface CategoryFilterProps {
   activeCategory: string;
-  setActiveCategory: (category: string) => void;
+  setActiveCategory: (category: string, subcategory?: string) => void;
+}
+
+/** Um cartão da home: sempre leva a uma lista, seja de seção ou de subcategoria. */
+interface Cartao {
+  /** Único na grade: o slug da subcategoria se repete entre seções. */
+  chave: string;
+  categoria: string;
+  subcategoria?: string;
+  nome: string;
+  image: string;
+  blurb: string;
 }
 
 export default function CategoryFilter({ setActiveCategory }: CategoryFilterProps) {
@@ -25,10 +36,44 @@ export default function CategoryFilter({ setActiveCategory }: CategoryFilterProp
    * Quando o catálogo real entrou, esses ids deixaram de existir: os cartões
    * continuavam bonitos na home e levavam a uma lista vazia.
    *
+   * Agora entram também as SUBCATEGORIAS marcadas, e não só as seções. O
+   * catálogo tem cinco seções e sessenta subcategorias, e é a subcategoria que
+   * o cliente procura: ele quer "Zoom óptico 20X" ou "Lapela", não "Câmeras
+   * PTZ" inteira. Com destaque só por seção, a home oferecia cinco portas de
+   * entrada para um catálogo de sessenta.
+   *
+   * A ordem é a da árvore — cada seção seguida das subcategorias dela —, para
+   * a grade ler como a navegação e não como uma lista embaralhada.
+   *
    * `featured` fica de fora porque é entrada de menu (Promoções, Novidades) e
-   * não categoria de catálogo.
+   * não categoria de catálogo. Filho marcado com `isCategory` também: ele é
+   * uma categoria agrupada, que já se destaca pela própria linha, e repetir
+   * daria dois cartões para a mesma lista.
    */
-  const cartoes = menu.filter((c) => c.home === true && c.featured !== true);
+  const cartoes: Cartao[] = [];
+  for (const c of menu) {
+    if (c.featured === true) continue;
+    if (c.home === true) {
+      cartoes.push({
+        chave: c.id,
+        categoria: c.id,
+        nome: c.name,
+        image: c.image ?? '',
+        blurb: c.blurb ?? '',
+      });
+    }
+    for (const sub of c.subcategories) {
+      if (sub.home !== true || sub.isCategory === true) continue;
+      cartoes.push({
+        chave: `${c.id}/${sub.id}`,
+        categoria: c.id,
+        subcategoria: sub.id,
+        nome: sub.name,
+        image: sub.image ?? '',
+        blurb: sub.blurb ?? '',
+      });
+    }
+  }
 
   /*
    * Sem nenhuma categoria marcada, a seção inteira SOME.
@@ -61,9 +106,9 @@ export default function CategoryFilter({ setActiveCategory }: CategoryFilterProp
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {cartoes.map((cat, i) => (
             <motion.button
-              id={`cat-card-${cat.id}`}
-              key={cat.id}
-              onClick={() => setActiveCategory(cat.id)}
+              id={`cat-card-${cat.chave.replace('/', '-')}`}
+              key={cat.chave}
+              onClick={() => setActiveCategory(cat.categoria, cat.subcategoria)}
               initial={{ opacity: 0, y: 24 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-60px' }}
@@ -81,9 +126,9 @@ export default function CategoryFilter({ setActiveCategory }: CategoryFilterProp
                 Sendo da mesma família, o cartão sem imagem lê como uma escolha.
               */}
               <div className="absolute inset-0 bg-gradient-to-br from-[#c9a888] to-[#a97b52]" />
-              {(cat.image ?? '') !== '' && (
+              {cat.image !== '' && (
                 <img
-                  src={safeImageSrc(cat.image ?? '')}
+                  src={safeImageSrc(cat.image)}
                   alt=""
                   /*
                     `object-cover`, e não `object-contain`.
@@ -127,9 +172,9 @@ export default function CategoryFilter({ setActiveCategory }: CategoryFilterProp
 
               <div className="absolute inset-0 p-5 sm:p-6 flex flex-col justify-end">
                 <h3 className="text-lg sm:text-2xl font-extrabold text-white leading-tight drop-shadow-sm">
-                  {cat.name}
+                  {cat.nome}
                 </h3>
-                {(cat.blurb ?? '') !== '' && (
+                {cat.blurb !== '' && (
                   <p className="text-xs sm:text-sm text-white/80 mt-0.5">{cat.blurb}</p>
                 )}
               </div>
