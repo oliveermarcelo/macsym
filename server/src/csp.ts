@@ -51,14 +51,35 @@ const COMUNS = [
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
-  'upgrade-insecure-requests',
 ];
 
-/** Para a <meta> do index.html (build do Vite). */
+/**
+ * Para a <meta> do index.html (build do Vite).
+ *
+ * `upgrade-insecure-requests` NÃO entra aqui — e nem no header enquanto a loja
+ * não tiver HTTPS. Essa diretiva manda o navegador buscar TODO sub-recurso em
+ * https: num servidor que só atende http:, o JS e o CSS simplesmente não
+ * carregam e a página fica em branco, com o HTML chegando normalmente. É um
+ * sintoma traiçoeiro: `curl` não aplica CSP e responde 200 em tudo, e
+ * `localhost` é isento da regra — então o erro só aparece no navegador, num
+ * endereço que não seja local.
+ */
 export const CSP_META = COMUNS.join('; ');
 
-/** Para o header HTTP das páginas — igual à meta, mais o frame-ancestors. */
-export const CSP_LOJA = [...COMUNS, "frame-ancestors 'none'"].join('; ');
+/**
+ * Para o header HTTP das páginas — a meta, mais o que só vale como header.
+ *
+ * `frame-ancestors` é ignorado quando vem em <meta>, e
+ * `upgrade-insecure-requests` depende de existir HTTPS: o mesmo FORCE_HTTPS
+ * que controla o redirecionamento decide se ele é enviado.
+ */
+export function cspLoja(comHttps: boolean): string {
+  return [
+    ...COMUNS,
+    ...(comHttps ? ['upgrade-insecure-requests'] : []),
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
 
 /** A API não renderiza nada e não deve ser embutida em iframe. */
 export const CSP_API = "default-src 'none'; frame-ancestors 'none'";

@@ -16,7 +16,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 
 import { requireCsrf } from './auth.ts';
 import { config } from './config.ts';
-import { CSP_API, CSP_LOJA } from './csp.ts';
+import { CSP_API, cspLoja } from './csp.ts';
 import { ApiError } from './errors.ts';
 import { jsonOk } from './http.ts';
 import { pastaDeMidia } from './midia.ts';
@@ -72,7 +72,7 @@ export function createApp(): express.Express {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('Content-Security-Policy', isApi ? CSP_API : CSP_LOJA);
+    res.setHeader('Content-Security-Policy', isApi ? CSP_API : cspLoja(config.forceHttps));
     if (!isApi) {
       res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=(), payment=()');
     }
